@@ -294,7 +294,7 @@ export function ScannerPage() {
                 Tus páginas
                 <span className="rounded-xl bg-macaw-light px-2.5 py-0.5 text-base text-macaw-dark">{pages.length}</span>
               </h2>
-              <Button variant="plain" size="sm" icon={<Trash2 className="size-4" />} onClick={clearAll} disabled={pages.every((p) => p.status === 'scanning')}>
+              <Button variant="plain" size="sm" icon={<Trash2 className="size-4" />} onClick={clearAll} disabled={adding || pages.every((p) => p.status === 'scanning')}>
                 Quitar todas
               </Button>
             </div>

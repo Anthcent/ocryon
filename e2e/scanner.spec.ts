@@ -109,6 +109,7 @@ test.describe('Escáner', () => {
     await signUp(page);
     await page.goto('/escanear');
     await upload(page, [pageImage(1), pageImage(2)]);
+    await expect(cards(page)).toHaveCount(2);
     await page.getByRole('button', { name: 'Quitar todas' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Quitar todas' }).click();
     await expect(page.getByText('Aún no hay páginas')).toBeVisible();
