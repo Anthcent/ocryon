@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../lib/api';
-import { prepareImage } from '../lib/image';
+import { prepareImage, rotateImage } from '../lib/image';
 import { loadPages, savePages, type PendingPage } from '../lib/pages-store';
 import { tesseractRecognize } from '../lib/tesseract';
 import type { Engine } from '../lib/types';
@@ -14,13 +14,15 @@ interface ScanSession {
   setEngine: (e: Engine) => void;
   setLanguage: (l: string) => void;
   setAutoScan: (v: boolean) => void;
-  /** Añade imágenes; devuelve cuántas no se pudieron leer. */
-  addImages: (files: Blob[]) => Promise<number>;
+  /** Añade imágenes al final; devuelve los ids creados y cuántas no se pudieron leer. */
+  addImages: (files: Blob[]) => Promise<{ ids: string[]; failed: number }>;
   queue: (ids?: string[]) => void;
   updateText: (id: string, text: string) => void;
   remove: (id: string) => void;
   removeMany: (ids: string[]) => void;
   move: (id: string, delta: number) => void;
+  /** Gira la imagen 90° a la derecha (útil si la foto salió de lado). */
+  rotate: (id: string) => Promise<void>;
 }
 
 const ScanSessionContext = createContext<ScanSession | null>(null);
@@ -110,6 +112,7 @@ export function ScanSessionProvider({
   const addImages = useCallback(
     async (files: Blob[]) => {
       let failed = 0;
+      const ids: string[] = [];
       for (const file of files) {
         let image: Blob;
         try {
@@ -125,9 +128,10 @@ export function ScanSessionProvider({
           text: '',
           createdAt: Date.now(),
         };
+        ids.push(page.id);
         setPages((all) => [...all, page]);
       }
-      return failed;
+      return { ids, failed };
     },
     [autoScan],
   );
@@ -163,9 +167,19 @@ export function ScanSessionProvider({
     });
   }, []);
 
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+
+  const rotate = useCallback(async (id: string) => {
+    const page = pagesRef.current.find((p) => p.id === id);
+    if (!page || page.status === 'scanning') return;
+    const image = await rotateImage(page.image);
+    setPages((all) => all.map((p) => (p.id === id ? { ...p, image } : p)));
+  }, []);
+
   return (
     <ScanSessionContext.Provider
-      value={{ pages, ready, engine, language, autoScan, setEngine, setLanguage, setAutoScan, addImages, queue, updateText, remove, removeMany, move }}
+      value={{ pages, ready, engine, language, autoScan, setEngine, setLanguage, setAutoScan, addImages, queue, updateText, remove, removeMany, move, rotate }}
     >
       {children}
     </ScanSessionContext.Provider>

@@ -6,7 +6,7 @@ Sistema para **escanear libros y documentos** con la cámara del móvil o del PC
 
 | Módulo | Qué hace |
 | --- | --- |
-| **Escáner** | Cámara en modo ráfaga (varias fotos seguidas), subida de imágenes múltiples, cola de páginas con reordenado, revisión y corrección del texto antes de guardar. |
+| **Escáner** | Pasos guiados (dónde guardar y cómo escanear), cámara en ráfaga con tira de fotos numeradas, subida múltiple o arrastrando, galería numerada para quitar y reordenar, visor a pantalla completa (girar, reescanear, corregir texto). |
 | **Motores OCR** | **OCR.space** y **Gemini** (vía servidor, con la API key del usuario) y **Tesseract** (en el propio dispositivo, sin internet). |
 | **Modo de escaneo** | Automático (escanea al tomar la foto) o manual (acumula fotos y escaneas cuando quieras). Por página o todas a la vez. |
 | **Catálogo** | **Grupos** (libros/capítulos con páginas ordenadas) y **escaneos individuales**. Solo se guarda el texto, nunca la imagen. |
@@ -18,7 +18,7 @@ Sistema para **escanear libros y documentos** con la cámara del móvil o del PC
 ## Stack
 
 - **Frontend** (`apps/web`): React 19 + TypeScript + Vite + Tailwind CSS 4. Diseño *mobile-first* estilo Duolingo. Tesseract.js se sirve desde la propia app (sin CDN), listo para el modo offline.
-- **Backend** (`apps/server`): Node.js + Express 5 + TypeScript, SQLite (better-sqlite3) con FTS5, validación con Zod.
+- **Backend** (`apps/server`): Node.js + Express 5 + TypeScript, SQLite integrado (`node:sqlite`) con FTS5, validación con Zod.
 - Monorepo con *npm workspaces*. En producción un único proceso sirve la API y el frontend.
 
 ```
@@ -35,7 +35,7 @@ apps/
 
 ## Puesta en marcha
 
-Requisitos: Node.js 20 o superior.
+Requisitos: Node.js 22.13 o superior (se usa el SQLite integrado en Node; no hace falta compilar nada).
 
 ```bash
 npm install
@@ -63,7 +63,12 @@ NODE_ENV=production JWT_SECRET=... ENCRYPTION_KEY=... npm start   # http://local
 ```bash
 npm test          # tests de la API (auth, ajustes, escaneos, búsqueda, aislamiento entre usuarios)
 npm run typecheck
+npm run test:e2e  # pruebas en navegador (móvil y escritorio) de todos los módulos
 ```
+
+Las pruebas E2E levantan su propio servidor en otros puertos, con una base de datos temporal y un
+simulador local de OCR.space y Gemini, así que no gastan tus API keys. La primera vez instala el
+navegador con `npx playwright install chromium`.
 
 ## API keys
 

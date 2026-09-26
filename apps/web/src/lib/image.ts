@@ -37,3 +37,21 @@ export async function prepareImage(file: Blob): Promise<Blob> {
     bitmap.close();
   }
 }
+
+/** Gira una imagen 90° en el sentido de las agujas del reloj. */
+export async function rotateImage(file: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.height;
+    canvas.height = bitmap.width;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas no disponible');
+    ctx.translate(canvas.width, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(bitmap, 0, 0);
+    return await canvasToBlob(canvas, 0.9);
+  } finally {
+    bitmap.close();
+  }
+}

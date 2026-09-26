@@ -1,18 +1,17 @@
-import { BookOpen, Camera, FileText, ImagePlus, KeyRound, Save, ScanLine, Zap } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import clsx from 'clsx';
+import { BookOpen, Camera, ImagePlus, Save, ScanLine, Trash2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, ProgressBar, Segmented, Select, Textarea, Toggle } from '../components/ui';
+import { Button, Card, ProgressBar } from '../components/ui';
 import { api } from '../lib/api';
-import { ENGINES, GROUP_COLORS, GROUP_STYLES, LANGUAGES } from '../lib/constants';
 import type { Engine, Group, GroupColor, ScanEngine } from '../lib/types';
 import { CameraCapture } from '../scan/CameraCapture';
-import { PageCard, useObjectUrl } from '../scan/PageCard';
+import { PageGallery } from '../scan/PageGallery';
+import { PageViewer } from '../scan/PageViewer';
+import { DestinationStep, EngineStep, NEW_GROUP, type Mode } from '../scan/ScanSetup';
 import { useScanSession } from '../scan/ScanSession';
 import { useSettings } from '../settings/SettingsContext';
-
-type Mode = 'individual' | 'group';
-const NEW_GROUP = 'new';
 
 export function ScannerPage() {
   const session = useScanSession();
@@ -30,7 +29,11 @@ export function ScannerPage() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  // En móvil los pasos empiezan plegados (muestran su resumen) para que los botones de captura
+  // queden a la vista; se abren al tocarlos. En escritorio siempre están abiertos.
+  const [openStep, setOpenStep] = useState<1 | 2 | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const systemCamera = useRef<HTMLInputElement>(null);
 
@@ -54,18 +57,28 @@ export function ScannerPage() {
   const busy = pages.some((p) => p.status === 'queued' || p.status === 'scanning');
   const scannable = pages.filter((p) => p.status === 'pending' || p.status === 'error');
   const finished = pages.filter((p) => p.status === 'done' || p.status === 'error').length;
-  const editing = pages.find((p) => p.id === editingId);
 
-  const engineReady = session.engine === 'tesseract' || settings.keys[session.engine].configured;
+  const keysReady: Record<Engine, boolean> = {
+    ocrspace: settings.keys.ocrspace.configured,
+    gemini: settings.keys.gemini.configured,
+    tesseract: true,
+  };
 
   const addFiles = async (files: FileList | Blob[] | null) => {
-    if (!files || files.length === 0) return;
+    // Se copia la lista ya: el FileList del <input> se vacía al reiniciarlo.
+    const list = Array.from(files ?? []);
+    if (list.length === 0) return;
+    const images = list.filter((f) => !(f instanceof File) || f.type.startsWith('image/') || f.type === '');
     setAdding(true);
     try {
-      const failed = await session.addImages(Array.from(files));
-      if (failed > 0) {
-        toast(`${failed === 1 ? 'Una imagen no se pudo' : `${failed} imágenes no se pudieron`} leer. Usa JPG, PNG o WEBP.`, 'error');
+      const { ids, failed } = await session.addImages(images);
+      const rejected = failed + (list.length - images.length);
+      if (rejected > 0) {
+        toast(`${rejected === 1 ? 'Una imagen no se pudo' : `${rejected} imágenes no se pudieron`} leer. Usa JPG, PNG o WEBP.`, 'error');
+      } else if (ids.length > 1) {
+        toast(`${ids.length} imágenes añadidas`);
       }
+      if (ids.length > 0) setOpenStep(null);
     } catch (err) {
       toast(errorMessage(err), 'error');
     } finally {
@@ -82,7 +95,28 @@ export function ScannerPage() {
     [toast],
   );
 
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    void addFiles(e.dataTransfer.files);
+  };
+
+  const clearAll = async () => {
+    const ok = await confirm({
+      title: '¿Quitar todas las páginas?',
+      message: `Se quitarán las ${pages.length} fotos y su texto sin guardar.`,
+      confirmLabel: 'Quitar todas',
+      danger: true,
+    });
+    if (ok) session.removeMany(pages.filter((p) => p.status !== 'scanning').map((p) => p.id));
+  };
+
   const save = async () => {
+    if (mode === 'group' && groupId === NEW_GROUP && !newTitle.trim()) {
+      setOpenStep(1);
+      toast('Ponle un nombre al grupo', 'error');
+      return;
+    }
     const skipped = pages.length - done.length;
     if (skipped > 0) {
       const ok = await confirm({
@@ -91,10 +125,6 @@ export function ScannerPage() {
         confirmLabel: 'Guardar',
       });
       if (!ok) return;
-    }
-    if (mode === 'group' && groupId === NEW_GROUP && !newTitle.trim()) {
-      toast('Ponle un nombre al grupo', 'error');
-      return;
     }
 
     setSaving(true);
@@ -118,37 +148,65 @@ export function ScannerPage() {
     }
   };
 
-  const destination = useMemo(() => {
-    if (mode === 'individual') return 'Cada página se guardará como un escaneo individual.';
-    if (groupId === NEW_GROUP) return 'Las páginas se guardarán juntas, en orden, en un grupo nuevo.';
-    const g = groups.find((x) => String(x.id) === groupId);
-    return g ? `Las páginas se añadirán al final de «${g.title}».` : '';
-  }, [mode, groupId, groups]);
+  const removePage = (id: string) => {
+    session.remove(id);
+    if (viewer !== null) {
+      const remaining = pages.length - 1;
+      if (remaining === 0) setViewer(null);
+      else setViewer(Math.min(viewer, remaining - 1));
+    }
+  };
+
+  const toggle = (step: 1 | 2) => setOpenStep((s) => (s === step ? null : step));
 
   return (
-    <div className="pb-20 lg:pb-0">
-      <PageHeader title="Escanear" subtitle="Toma fotos o sube imágenes de las páginas que quieres convertir en texto." />
+    <div className={clsx(pages.length > 0 && 'pb-28 lg:pb-24')}>
+      <div className="mb-5">
+        <h1 className="text-2xl font-black sm:text-3xl">Escanear</h1>
+        <p className="mt-1 text-wolf">Elige cómo guardar, toma las fotos y conviértelas en texto.</p>
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        {/* Captura */}
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setCameraOpen(true)}
-              className="flex flex-col items-center gap-2 rounded-3xl border-2 border-b-4 border-feather-dark bg-feather px-4 py-6 text-white transition active:translate-y-[2px] active:border-b-2"
-            >
-              <Camera className="size-10" strokeWidth={2.25} />
-              <span className="text-sm font-extrabold uppercase tracking-wide">Tomar fotos</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              className="flex flex-col items-center gap-2 rounded-3xl border-2 border-b-4 border-macaw-dark bg-macaw px-4 py-6 text-white transition active:translate-y-[2px] active:border-b-2"
-            >
-              <ImagePlus className="size-10" strokeWidth={2.25} />
-              <span className="text-sm font-extrabold uppercase tracking-wide">Subir imágenes</span>
-            </button>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        {/* Captura y páginas */}
+        <div className="space-y-4 lg:order-1">
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={clsx(
+              'rounded-3xl border-2 border-dashed p-3 transition sm:p-4',
+              dragging ? 'border-macaw bg-macaw-light' : 'border-swan',
+            )}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setCameraOpen(true)}
+                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-b-[6px] border-feather-dark bg-feather px-3 py-5 text-white transition active:translate-y-[3px] active:border-b-2 sm:py-7"
+              >
+                <Camera className="size-10 sm:size-12" strokeWidth={2.25} />
+                <span className="text-sm font-extrabold uppercase tracking-wide sm:text-base">Tomar fotos</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-b-[6px] border-macaw-dark bg-macaw px-3 py-5 text-white transition active:translate-y-[3px] active:border-b-2 sm:py-7"
+              >
+                <ImagePlus className="size-10 sm:size-12" strokeWidth={2.25} />
+                <span className="text-sm font-extrabold uppercase tracking-wide sm:text-base">Subir imágenes</span>
+              </button>
+            </div>
+            <p className="mt-3 hidden items-center justify-center gap-2 text-sm font-bold text-hare sm:flex">
+              <Upload className="size-4" /> {dragging ? 'Suelta las imágenes aquí' : 'También puedes arrastrar imágenes aquí'}
+            </p>
+            {adding && (
+              <p className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-macaw">
+                <ScanLine className="size-4 animate-pulse" /> Preparando imágenes…
+              </p>
+            )}
           </div>
           <input
             ref={fileInput}
@@ -173,189 +231,107 @@ export function ScannerPage() {
             }}
           />
 
-          {adding && (
-            <p className="flex items-center gap-2 text-sm font-bold text-macaw">
-              <ScanLine className="size-4 animate-pulse" /> Preparando imágenes…
-            </p>
-          )}
-
-          {!engineReady && (
-            <div className="flex items-start gap-3 rounded-2xl border-2 border-bee bg-bee-light p-4">
-              <KeyRound className="mt-0.5 size-5 shrink-0 text-bee-dark" />
-              <p className="text-sm font-semibold text-eel">
-                Para usar {ENGINES[session.engine].label} necesitas su API key.{' '}
-                <Link to="/ajustes" className="font-extrabold text-macaw">
-                  Configurarla
-                </Link>{' '}
-                o usa Tesseract, que funciona sin clave.
-              </p>
-            </div>
-          )}
-
           {pages.length === 0 ? (
-            <Card>
-              <EmptyState icon={<BookOpen className="size-10" />} title="Aún no hay páginas">
-                Toma una foto por página. Puedes tomar varias seguidas y se quedarán agrupadas aquí hasta que las guardes.
-              </EmptyState>
+            <Card className="flex flex-col items-center px-6 py-10 text-center">
+              <div className="mb-4 flex size-20 items-center justify-center rounded-3xl bg-polar text-hare">
+                <BookOpen className="size-10" />
+              </div>
+              <h3 className="text-xl font-black">Aún no hay páginas</h3>
+              <p className="mt-2 max-w-sm text-wolf">
+                Toma una foto por página. Puedes tomar varias seguidas: aparecerán aquí numeradas y podrás revisarlas antes de guardar.
+              </p>
             </Card>
           ) : (
-            <>
-              <Card className="space-y-3 p-4">
-                <div className="flex items-center justify-between text-sm font-extrabold">
-                  <span>
-                    {finished} de {pages.length} escaneadas
-                  </span>
-                  {busy && <Badge tone="blue">Procesando…</Badge>}
-                </div>
-                <ProgressBar value={(finished / pages.length) * 100} />
-              </Card>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                {pages.map((page, i) => (
-                  <PageCard
-                    key={page.id}
-                    page={page}
-                    index={i}
-                    total={pages.length}
-                    onScan={() => session.queue([page.id])}
-                    onEdit={() => setEditingId(page.id)}
-                    onRemove={() => session.remove(page.id)}
-                    onMove={(d) => session.move(page.id, d)}
-                  />
-                ))}
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-xl font-black">
+                  Tus páginas
+                  <span className="rounded-xl bg-macaw-light px-2.5 py-0.5 text-base text-macaw-dark">{pages.length}</span>
+                </h2>
+                <Button variant="plain" size="sm" icon={<Trash2 className="size-4" />} onClick={clearAll} disabled={pages.every((p) => p.status === 'scanning')}>
+                  Quitar todas
+                </Button>
               </div>
-            </>
+              <PageGallery
+                pages={pages}
+                onOpen={(id) => setViewer(pages.findIndex((p) => p.id === id))}
+                onRemove={removePage}
+                onMove={session.move}
+                onScan={(id) => session.queue([id])}
+                onAdd={() => fileInput.current?.click()}
+              />
+            </section>
           )}
         </div>
 
-        {/* Opciones */}
-        <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <Card className="space-y-4 p-4">
-            <h2 className="font-black">¿Cómo escanear?</h2>
-            <Segmented<Engine>
-              value={session.engine}
-              onChange={session.setEngine}
-              options={(Object.keys(ENGINES) as Engine[]).map((e) => ({ value: e, label: ENGINES[e].label }))}
-            />
-            <p className="text-sm text-wolf">{ENGINES[session.engine].description}</p>
-            <Field label="Idioma del texto">
-              <Select value={session.language} onChange={(e) => session.setLanguage(e.target.value)}>
-                {LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-1.5 text-sm font-extrabold">
-                  <Zap className="size-4 text-bee-dark" /> Escaneo automático
-                </div>
-                <p className="text-xs text-wolf">Escanea cada foto al tomarla, sin confirmar.</p>
-              </div>
-              <Toggle checked={session.autoScan} onChange={session.setAutoScan} label="Escaneo automático" />
+        {/* Opciones: en escritorio siempre visibles a la derecha; en móvil, arriba y plegables */}
+        <div className="-order-1 space-y-3 lg:sticky lg:top-6 lg:order-2">
+          <DestinationStep
+            open={openStep === 1}
+            onToggle={() => toggle(1)}
+            mode={mode}
+            setMode={setMode}
+            groups={groups}
+            groupId={groupId}
+            setGroupId={setGroupId}
+            newTitle={newTitle}
+            setNewTitle={setNewTitle}
+            newColor={newColor}
+            setNewColor={setNewColor}
+          />
+          <EngineStep
+            open={openStep === 2}
+            onToggle={() => toggle(2)}
+            engine={session.engine}
+            setEngine={session.setEngine}
+            language={session.language}
+            setLanguage={session.setLanguage}
+            autoScan={session.autoScan}
+            setAutoScan={session.setAutoScan}
+            keysReady={keysReady}
+          />
+        </div>
+      </div>
+
+      {/* Barra de acciones fija, siempre a la vista mientras hay páginas */}
+      {pages.length > 0 && (
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t-2 border-swan bg-white/95 backdrop-blur lg:bottom-0 lg:left-64">
+          <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
+            <div className="flex items-center gap-3 sm:flex-1">
+              <span className="shrink-0 text-sm font-extrabold">
+                {finished} de {pages.length} escaneadas
+              </span>
+              <ProgressBar value={(finished / pages.length) * 100} className="h-3" />
             </div>
-          </Card>
-
-          <Card className="space-y-4 p-4">
-            <h2 className="font-black">¿Dónde se guarda?</h2>
-            <Segmented<Mode>
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'individual', label: 'Individual', icon: <FileText className="size-4" /> },
-                { value: 'group', label: 'Grupo', icon: <BookOpen className="size-4" /> },
-              ]}
-            />
-            {mode === 'group' && (
-              <>
-                <Select value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Grupo">
-                  <option value={NEW_GROUP}>+ Nuevo grupo</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.title}
-                    </option>
-                  ))}
-                </Select>
-                {groupId === NEW_GROUP && (
-                  <>
-                    <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Ej. Cien años de soledad" maxLength={160} />
-                    <div className="flex gap-2">
-                      {GROUP_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          aria-label={`Color ${c}`}
-                          onClick={() => setNewColor(c)}
-                          className={`size-8 rounded-full ${GROUP_STYLES[c].bg} ${newColor === c ? 'ring-4 ring-macaw/40 ring-offset-2' : ''}`}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-            <p className="text-xs text-wolf">{destination}</p>
-          </Card>
-
-          <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t-2 border-swan bg-white p-3 lg:static lg:border-0 lg:bg-transparent lg:p-0">
-            <div className="mx-auto grid max-w-md grid-cols-2 gap-3 lg:max-w-none lg:grid-cols-1">
-              <Button variant="secondary" icon={<ScanLine className="size-5" />} disabled={scannable.length === 0} onClick={() => session.queue()}>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Button variant="secondary" icon={<ScanLine className="hidden size-5 sm:block" />} className="whitespace-nowrap" disabled={scannable.length === 0} onClick={() => session.queue()}>
                 Escanear {scannable.length > 0 && `(${scannable.length})`}
               </Button>
-              <Button icon={<Save className="size-5" />} disabled={done.length === 0 || busy} loading={saving} onClick={save}>
+              <Button icon={<Save className="hidden size-5 sm:block" />} className="whitespace-nowrap" disabled={done.length === 0 || busy} loading={saving} onClick={save}>
                 Guardar {done.length > 0 && `(${done.length})`}
               </Button>
             </div>
           </div>
         </div>
-      </div>
-
-      {cameraOpen && (
-        <CameraCapture onCapture={(blob) => void addFiles([blob])} onClose={() => setCameraOpen(false)} onUnavailable={onCameraUnavailable} />
       )}
 
-      <PageEditor
-        key={editingId ?? 'none'}
-        page={editing}
-        onClose={() => setEditingId(null)}
-        onSave={(text) => {
-          if (editing) session.updateText(editing.id, text);
-          setEditingId(null);
-        }}
-      />
-    </div>
-  );
-}
+      {cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onUnavailable={onCameraUnavailable} />}
 
-function PageEditor({
-  page,
-  onClose,
-  onSave,
-}: {
-  page: ReturnType<typeof useScanSession>['pages'][number] | undefined;
-  onClose: () => void;
-  onSave: (text: string) => void;
-}) {
-  const [text, setText] = useState(page?.text ?? '');
-  const url = useObjectUrl(page?.image);
-  return (
-    <Modal open={Boolean(page)} onClose={onClose} title="Revisar página">
-      {url && <img src={url} alt="Página" className="mb-4 max-h-64 w-full rounded-2xl border-2 border-swan object-contain" />}
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={10}
-        placeholder={page?.status === 'done' ? 'Sin texto' : 'Aún no se escanea. También puedes escribir el texto a mano.'}
-      />
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Button variant="plain" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button onClick={() => onSave(text)} disabled={!text.trim() || page?.status === 'scanning'}>
-          Aplicar
-        </Button>
-      </div>
-    </Modal>
+      {viewer !== null && pages[viewer] && (
+        <PageViewer
+          pages={pages}
+          index={viewer}
+          onIndex={setViewer}
+          onClose={() => setViewer(null)}
+          onSaveText={(id, text) => {
+            session.updateText(id, text);
+            toast('Texto actualizado');
+          }}
+          onScan={(id) => session.queue([id])}
+          onRotate={session.rotate}
+          onRemove={removePage}
+        />
+      )}
+    </div>
   );
 }
