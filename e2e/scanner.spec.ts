@@ -166,7 +166,7 @@ test.describe('Escáner', () => {
     const { groupId } = await res.json();
 
     await page.goto(`/catalogo/grupo/${groupId}`);
-    await page.getByRole('button', { name: 'Añadir páginas' }).click();
+    await page.getByRole('button', { name: 'Añadir páginas' }).first().click();
     await expect(page).toHaveURL(new RegExp(`/escanear\\?grupo=${groupId}$`));
     await expect(page.getByText('Grupo: Mi libro').or(page.getByText('se añadirán al final de «Mi libro»')).locator('visible=true').first()).toBeVisible();
     await openStep(page, '¿Dónde se guarda?');

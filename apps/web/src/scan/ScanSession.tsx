@@ -135,9 +135,14 @@ export function ScanSessionProvider({
       } finally {
         clearInterval(timer);
         setProgress(({ [next.id]: _done, ...rest }) => rest);
-        running.current = false;
-        // Fuerza una nueva evaluación de la cola.
-        setPages((all) => [...all]);
+        // La cola se libera dentro de la misma actualización que registra el resultado. Si se liberara
+        // aquí directamente, un efecto pendiente con el estado anterior (esta página aún «escaneando»
+        // y las demás «en cola») podría arrancar la siguiente antes de aplicar, p. ej., el freno por
+        // API key inválida. React ejecuta esos efectos pendientes antes de procesar esta actualización.
+        setPages((all) => {
+          running.current = false;
+          return [...all];
+        });
       }
     })();
   }, [pages, ready, engine, language, patch]);
