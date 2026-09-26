@@ -101,7 +101,7 @@ export const api = {
     remove: (id: number) => request<void>(`/scans/${id}`, { method: 'DELETE' }),
   },
   search: (q: string, groupId?: number) => request<{ results: SearchResult[] }>(`/search${qs({ q, groupId })}`),
-  stats: () => request<Stats>('/stats'),
+  stats: () => request<Stats>(`/stats${qs({ tz: -new Date().getTimezoneOffset() })}`),
   analyses: {
     list: (targetType: 'group' | 'scan', targetId: number) =>
       request<{ analyses: Analysis[] }>(`/analyses${qs({ targetType, targetId })}`),

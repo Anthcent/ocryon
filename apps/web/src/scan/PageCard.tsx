@@ -40,6 +40,7 @@ export function PageCard({ page, index, total, onScan, onEdit, onRemove, onMove 
 
   return (
     <div
+      data-testid="page-card"
       className={clsx(
         'flex flex-col overflow-hidden rounded-2xl border-2 border-b-4 bg-white',
         page.status === 'done' ? 'border-feather/60' : page.status === 'error' ? 'border-cardinal/60' : 'border-swan',

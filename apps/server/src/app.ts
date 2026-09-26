@@ -39,7 +39,7 @@ export function createApp(ctx: AppContext, options: { webDist?: string } = {}) {
       crossOriginEmbedderPolicy: false,
     }),
   );
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '10mb' }));
   app.use(cookieParser());
 
   const api = express.Router();

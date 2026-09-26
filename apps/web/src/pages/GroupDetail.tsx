@@ -7,7 +7,7 @@ import { errorMessage, useFeedback } from '../components/feedback';
 import { Button, Card, EmptyState, IconButton, PageLoader, Segmented } from '../components/ui';
 import { api } from '../lib/api';
 import { GROUP_STYLES } from '../lib/constants';
-import { downloadText, formatDate, formatNumber } from '../lib/format';
+import { copyText, downloadText, formatDate, formatNumber } from '../lib/format';
 import type { Group, Scan } from '../lib/types';
 import { GroupFormModal } from './Catalog';
 
@@ -60,9 +60,13 @@ export function GroupDetailPage() {
   const removeScan = async (scan: Scan) => {
     const ok = await confirm({ title: '¿Borrar esta página?', message: `Se borrará «${scan.title}» y su texto.`, confirmLabel: 'Borrar', danger: true });
     if (!ok) return;
-    await api.scans.remove(scan.id);
-    setScans((s) => s.filter((x) => x.id !== scan.id));
-    toast('Página borrada');
+    try {
+      await api.scans.remove(scan.id);
+      setScans((s) => s.filter((x) => x.id !== scan.id));
+      toast('Página borrada');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
   };
 
   const removeGroup = async () => {
@@ -73,14 +77,22 @@ export function GroupDetailPage() {
       danger: true,
     });
     if (!ok) return;
-    await api.groups.remove(group.id);
-    toast('Grupo borrado');
-    navigate('/catalogo', { replace: true });
+    try {
+      await api.groups.remove(group.id);
+      toast('Grupo borrado');
+      navigate('/catalogo', { replace: true });
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
   };
 
   const copyAll = async () => {
-    await navigator.clipboard.writeText(fullText);
-    toast('Texto copiado');
+    try {
+      await copyText(fullText);
+      toast('Texto copiado');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
   };
 
   return (

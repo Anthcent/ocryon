@@ -27,3 +27,8 @@ apps/server/data/
 *.db-shm
 *.db-wal
 apps/web/public/tesseract/
+
+# Pruebas E2E
+e2e/.fixtures/
+test-results/
+playwright-report/

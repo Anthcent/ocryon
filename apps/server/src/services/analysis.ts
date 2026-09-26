@@ -1,3 +1,4 @@
+import { HttpError } from '../lib/http-error.js';
 import { geminiGenerate } from './gemini.js';
 
 const MAX_CHARS = 400_000;
@@ -61,6 +62,11 @@ export async function analyzeWithGemini(text: string, title: string, apiKey: str
   ].join('\n');
 
   const raw = await geminiGenerate({ apiKey, model, parts: [{ text: prompt }], temperature: 0.3, responseSchema: schema });
-  const parsed = JSON.parse(raw) as OnlineAnalysis;
+  let parsed: OnlineAnalysis;
+  try {
+    parsed = JSON.parse(raw) as OnlineAnalysis;
+  } catch {
+    throw new HttpError(502, 'Gemini devolvió una respuesta incompleta, inténtalo de nuevo', 'provider_error');
+  }
   return { ...parsed, truncated };
 }

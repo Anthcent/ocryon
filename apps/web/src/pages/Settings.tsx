@@ -62,7 +62,7 @@ export function SettingsPage() {
             onSave={(key) => update({ geminiKey: key }, key ? 'Clave de Gemini guardada' : 'Clave eliminada')}
           />
           <Field label="Modelo de Gemini" hint="Se usa para el OCR con Gemini y para el análisis con IA.">
-            <ModelInput value={settings.geminiModel} onSave={(geminiModel) => update({ geminiModel })} />
+            <ModelInput key={settings.geminiModel} value={settings.geminiModel} onSave={(geminiModel) => update({ geminiModel })} />
           </Field>
         </div>
       </Section>

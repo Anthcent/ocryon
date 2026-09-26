@@ -14,7 +14,8 @@ interface ScanSession {
   setEngine: (e: Engine) => void;
   setLanguage: (l: string) => void;
   setAutoScan: (v: boolean) => void;
-  addImages: (files: Blob[]) => Promise<void>;
+  /** Añade imágenes; devuelve cuántas no se pudieron leer. */
+  addImages: (files: Blob[]) => Promise<number>;
   queue: (ids?: string[]) => void;
   updateText: (id: string, text: string) => void;
   remove: (id: string) => void;
@@ -31,7 +32,15 @@ const BLOCKING_CODES = new Set(['missing_api_key', 'invalid_api_key', 'invalid_m
  * Sesión de escaneo global: las páginas capturadas y la cola de OCR sobreviven
  * a la navegación entre pantallas y a recargas (se guardan en IndexedDB).
  */
-export function ScanSessionProvider({ children, defaults }: { children: ReactNode; defaults: { engine: Engine; language: string; autoScan: boolean } }) {
+export function ScanSessionProvider({
+  children,
+  userId,
+  defaults,
+}: {
+  children: ReactNode;
+  userId: number;
+  defaults: { engine: Engine; language: string; autoScan: boolean };
+}) {
   const [pages, setPages] = useState<PendingPage[]>([]);
   const [ready, setReady] = useState(false);
   const [engine, setEngine] = useState<Engine>(defaults.engine);
@@ -46,15 +55,15 @@ export function ScanSessionProvider({ children, defaults }: { children: ReactNod
   }, [defaults.engine, defaults.language, defaults.autoScan]);
 
   useEffect(() => {
-    loadPages().then((p) => {
+    loadPages(userId).then((p) => {
       setPages(p);
       setReady(true);
     });
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    if (ready) void savePages(pages);
-  }, [pages, ready]);
+    if (ready) void savePages(userId, pages);
+  }, [pages, ready, userId]);
 
   const patch = useCallback((id: string, changes: Partial<PendingPage>) => {
     setPages((all) => all.map((p) => (p.id === id ? { ...p, ...changes } : p)));
@@ -100,8 +109,15 @@ export function ScanSessionProvider({ children, defaults }: { children: ReactNod
 
   const addImages = useCallback(
     async (files: Blob[]) => {
+      let failed = 0;
       for (const file of files) {
-        const image = await prepareImage(file);
+        let image: Blob;
+        try {
+          image = await prepareImage(file);
+        } catch {
+          failed++;
+          continue;
+        }
         const page: PendingPage = {
           id: crypto.randomUUID(),
           image,
@@ -111,6 +127,7 @@ export function ScanSessionProvider({ children, defaults }: { children: ReactNod
         };
         setPages((all) => [...all, page]);
       }
+      return failed;
     },
     [autoScan],
   );

@@ -21,6 +21,26 @@ export function timeAgo(value: string) {
   return formatDate(value);
 }
 
+/**
+ * Copia al portapapeles. La API moderna solo existe en HTTPS o localhost; al abrir la app
+ * por IP en la red local se usa el método antiguo como alternativa.
+ */
+export async function copyText(text: string) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  const ok = document.execCommand('copy');
+  area.remove();
+  if (!ok) throw new Error('No se pudo copiar el texto');
+}
+
 export function downloadText(filename: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
   const a = document.createElement('a');

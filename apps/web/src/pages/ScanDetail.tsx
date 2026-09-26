@@ -6,7 +6,7 @@ import { errorMessage, useFeedback } from '../components/feedback';
 import { Badge, Button, Card, EmptyState, Field, IconButton, Input, PageLoader, Select, Textarea } from '../components/ui';
 import { api } from '../lib/api';
 import { ENGINE_LABEL, LANGUAGES } from '../lib/constants';
-import { downloadText, formatDate, formatNumber } from '../lib/format';
+import { copyText, downloadText, formatDate, formatNumber } from '../lib/format';
 import type { Group, Scan } from '../lib/types';
 
 export function ScanDetailPage() {
@@ -21,6 +21,12 @@ export function ScanDetailPage() {
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
+  /** Páginas del mismo grupo, para navegar a la anterior / siguiente. */
+  const loadSiblings = (groupId: number | null) => {
+    if (!groupId) return setSiblings([]);
+    api.groups.get(groupId).then((r) => setSiblings(r.scans.map((s) => s.id))).catch(() => setSiblings([]));
+  };
+
   useEffect(() => {
     setScan(null);
     api.scans
@@ -29,9 +35,7 @@ export function ScanDetailPage() {
         setScan(scan);
         setTitle(scan.title);
         setText(scan.text);
-        if (scan.groupId) {
-          api.groups.get(scan.groupId).then((r) => setSiblings(r.scans.map((s) => s.id))).catch(() => {});
-        } else setSiblings([]);
+        loadSiblings(scan.groupId);
       })
       .catch(() => setNotFound(true));
     api.groups.list().then((r) => setGroups(r.groups)).catch(() => {});
@@ -64,6 +68,7 @@ export function ScanDetailPage() {
     try {
       const { scan: updated } = await api.scans.update(scan.id, { groupId: value ? Number(value) : null });
       setScan(updated);
+      loadSiblings(updated.groupId);
       toast(updated.groupTitle ? `Movido a «${updated.groupTitle}»` : 'Ahora es un escaneo individual');
     } catch (err) {
       toast(errorMessage(err), 'error');
@@ -72,9 +77,22 @@ export function ScanDetailPage() {
 
   const remove = async () => {
     if (!(await confirm({ title: '¿Borrar escaneo?', message: 'Se borrará el texto y sus análisis.', confirmLabel: 'Borrar', danger: true }))) return;
-    await api.scans.remove(scan.id);
-    toast('Escaneo borrado');
-    navigate(scan.groupId ? `/catalogo/grupo/${scan.groupId}` : '/catalogo?vista=individuales', { replace: true });
+    try {
+      await api.scans.remove(scan.id);
+      toast('Escaneo borrado');
+      navigate(scan.groupId ? `/catalogo/grupo/${scan.groupId}` : '/catalogo?vista=individuales', { replace: true });
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await copyText(text);
+      toast('Texto copiado');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
   };
 
   const language = LANGUAGES.find((l) => l.code === scan.language)?.label ?? scan.language;
@@ -121,10 +139,7 @@ export function ScanDetailPage() {
           <Button
             variant="plain"
             icon={<Copy className="size-5" />}
-            onClick={async () => {
-              await navigator.clipboard.writeText(text);
-              toast('Texto copiado');
-            }}
+            onClick={copy}
           >
             Copiar
           </Button>

@@ -11,12 +11,14 @@
     "build": "npm run build -w @ocryon/web && npm run build -w @ocryon/server",
     "start": "npm run start -w @ocryon/server",
     "typecheck": "npm run typecheck --workspaces",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=22.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "concurrently": "^10.0.5"
   }
 }

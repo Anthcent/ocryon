@@ -17,8 +17,9 @@ import { SettingsProvider, useSettings } from './settings/SettingsContext';
 
 function SessionWithDefaults({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
+  const { user } = useAuth();
   return (
-    <ScanSessionProvider defaults={{ engine: settings.defaultEngine, language: settings.ocrLanguage, autoScan: settings.autoScan }}>
+    <ScanSessionProvider userId={user!.id} defaults={{ engine: settings.defaultEngine, language: settings.ocrLanguage, autoScan: settings.autoScan }}>
       {children}
     </ScanSessionProvider>
   );

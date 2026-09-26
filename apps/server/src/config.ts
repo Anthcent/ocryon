@@ -20,6 +20,8 @@ export const config = {
   jwtSecret: secret('JWT_SECRET', 'dev-only-jwt-secret-change-me'),
   encryptionKey: secret('ENCRYPTION_KEY', 'dev-only-encryption-key-change-me'),
   sessionDays: 7,
+  /** Intentos de login/registro permitidos por IP cada 15 minutos. */
+  authRateLimit: Number(process.env.AUTH_RATE_LIMIT ?? 20),
   /** Claves globales opcionales; cada usuario puede configurar las suyas desde Ajustes. */
   fallbackKeys: {
     ocrspace: process.env.OCRSPACE_API_KEY ?? '',

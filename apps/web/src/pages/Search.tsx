@@ -36,6 +36,7 @@ export function SearchPage() {
     setParams(q ? { q } : {}, { replace: true });
     if (!q) {
       setResults(null);
+      setLoading(false);
       return;
     }
     setLoading(true);

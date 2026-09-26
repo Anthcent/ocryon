@@ -26,7 +26,7 @@ export function authRouter(ctx: AppContext) {
   const router = Router();
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 20,
+    limit: config.authRateLimit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { error: 'Demasiados intentos, espera unos minutos', code: 'rate_limited' },

@@ -1,6 +1,7 @@
 import { HttpError } from '../lib/http-error.js';
 
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+// Configurable solo para pruebas automáticas con un simulador local.
+const API_BASE = process.env.GEMINI_API_BASE ?? 'https://generativelanguage.googleapis.com/v1beta';
 
 type Part = { text: string } | { inline_data: { mime_type: string; data: string } };
 

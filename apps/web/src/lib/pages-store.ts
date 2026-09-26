@@ -16,11 +16,12 @@ export interface PendingPage {
   createdAt: number;
 }
 
-const KEY = 'ocryon:pending-pages';
+// Una clave por usuario: en un dispositivo compartido nadie ve las fotos pendientes de otro.
+const keyFor = (userId: number) => `ocryon:pending-pages:${userId}`;
 
-export async function loadPages(): Promise<PendingPage[]> {
+export async function loadPages(userId: number): Promise<PendingPage[]> {
   try {
-    const pages = (await get<PendingPage[]>(KEY)) ?? [];
+    const pages = (await get<PendingPage[]>(keyFor(userId))) ?? [];
     // Si la app se cerró a mitad de un escaneo, esas páginas vuelven a la cola.
     return pages.map((p) => (p.status === 'scanning' ? { ...p, status: 'queued' } : p));
   } catch {
@@ -28,9 +29,9 @@ export async function loadPages(): Promise<PendingPage[]> {
   }
 }
 
-export async function savePages(pages: PendingPage[]) {
+export async function savePages(userId: number, pages: PendingPage[]) {
   try {
-    await set(KEY, pages);
+    await set(keyFor(userId), pages);
   } catch {
     // Sin IndexedDB (modo privado): las páginas solo viven en memoria.
   }

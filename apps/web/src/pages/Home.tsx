@@ -1,10 +1,10 @@
 import clsx from 'clsx';
-import { BookOpen, ChevronRight, FileText, Flame, ScanLine, Type } from 'lucide-react';
+import { BookOpen, ChevronRight, FileText, Flame, ScanLine, Type, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { Mascot } from '../components/Logo';
-import { Button, Card, PageLoader } from '../components/ui';
+import { Button, Card, EmptyState, PageLoader } from '../components/ui';
 import { api } from '../lib/api';
 import { GROUP_STYLES } from '../lib/constants';
 import { formatNumber, timeAgo } from '../lib/format';
@@ -19,11 +19,24 @@ export function HomePage() {
   const { settings, loaded } = useSettings();
   const { pages } = useScanSession();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    api.stats().then(setStats).catch(() => {});
-  }, []);
+  const load = () => {
+    setFailed(false);
+    api
+      .stats()
+      .then(setStats)
+      .catch(() => setFailed(true));
+  };
+  useEffect(load, []);
 
+  if (failed) {
+    return (
+      <EmptyState icon={<WifiOff className="size-10" />} title="No se pudo cargar el inicio" action={<Button onClick={load}>Reintentar</Button>}>
+        Revisa tu conexión con el servidor.
+      </EmptyState>
+    );
+  }
   if (!stats) return <PageLoader />;
 
   const noKeys = loaded && !settings.keys.ocrspace.configured && !settings.keys.gemini.configured;

@@ -1,6 +1,7 @@
 import { HttpError } from '../../lib/http-error.js';
 
-const ENDPOINT = 'https://api.ocr.space/parse/image';
+// Configurable solo para pruebas automáticas con un simulador local.
+const ENDPOINT = process.env.OCRSPACE_ENDPOINT ?? 'https://api.ocr.space/parse/image';
 
 export async function ocrSpaceRecognize(image: Buffer, mimeType: string, apiKey: string, language: string) {
   const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';

@@ -35,6 +35,11 @@ export function ScannerPage() {
   const systemCamera = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Al llegar desde «Añadir páginas» de un grupo, ese grupo queda seleccionado.
+    if (preselected) {
+      setMode('group');
+      setGroupId(preselected);
+    }
     api.groups
       .list()
       .then((r) => {
@@ -57,7 +62,10 @@ export function ScannerPage() {
     if (!files || files.length === 0) return;
     setAdding(true);
     try {
-      await session.addImages(Array.from(files));
+      const failed = await session.addImages(Array.from(files));
+      if (failed > 0) {
+        toast(`${failed === 1 ? 'Una imagen no se pudo' : `${failed} imágenes no se pudieron`} leer. Usa JPG, PNG o WEBP.`, 'error');
+      }
     } catch (err) {
       toast(errorMessage(err), 'error');
     } finally {
@@ -290,7 +298,7 @@ export function ScannerPage() {
             <p className="text-xs text-wolf">{destination}</p>
           </Card>
 
-          <div className="pb-safe fixed inset-x-0 bottom-16 z-30 border-t-2 border-swan bg-white p-3 lg:static lg:border-0 lg:bg-transparent lg:p-0">
+          <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t-2 border-swan bg-white p-3 lg:static lg:border-0 lg:bg-transparent lg:p-0">
             <div className="mx-auto grid max-w-md grid-cols-2 gap-3 lg:max-w-none lg:grid-cols-1">
               <Button variant="secondary" icon={<ScanLine className="size-5" />} disabled={scannable.length === 0} onClick={() => session.queue()}>
                 Escanear {scannable.length > 0 && `(${scannable.length})`}

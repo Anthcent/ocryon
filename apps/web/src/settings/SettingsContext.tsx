@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { PageLoader } from '../components/ui';
 import { api } from '../lib/api';
 import type { Settings } from '../lib/types';
 
@@ -38,6 +39,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
+  // Se espera a tener los ajustes reales para que el escáner arranque con el motor e idioma correctos.
+  if (!loaded) return <PageLoader />;
   return <SettingsContext.Provider value={{ settings, loaded, setSettings, reload }}>{children}</SettingsContext.Provider>;
 }
 
