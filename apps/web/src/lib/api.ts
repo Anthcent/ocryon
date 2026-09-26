@@ -1,0 +1,114 @@
+import type {
+  Analysis,
+  Engine,
+  Group,
+  GroupColor,
+  Scan,
+  ScanEngine,
+  SearchResult,
+  Settings,
+  Stats,
+  User,
+} from './types';
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Se dispara cuando el servidor responde 401 para que la app vuelva al login. */
+export const UNAUTHORIZED_EVENT = 'ocryon:unauthorized';
+
+async function request<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set('X-Requested-With', 'ocryon');
+  let body = init.body;
+  if (init.json !== undefined) {
+    headers.set('Content-Type', 'application/json');
+    body = JSON.stringify(init.json);
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { ...init, headers, body, credentials: 'same-origin' });
+  } catch {
+    throw new ApiError(0, 'Sin conexión con el servidor', 'offline');
+  }
+
+  if (res.status === 204) return undefined as T;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    throw new ApiError(res.status, data.error ?? `Error ${res.status}`, data.code);
+  }
+  return data as T;
+}
+
+const qs = (params: Record<string, string | number | undefined>) => {
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== '') as [string, string][];
+  return entries.length ? `?${new URLSearchParams(entries)}` : '';
+};
+
+export const api = {
+  auth: {
+    me: () => request<{ user: User }>('/auth/me'),
+    login: (email: string, password: string) => request<{ user: User }>('/auth/login', { method: 'POST', json: { email, password } }),
+    register: (name: string, email: string, password: string) =>
+      request<{ user: User }>('/auth/register', { method: 'POST', json: { name, email, password } }),
+    logout: () => request<void>('/auth/logout', { method: 'POST' }),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<void>('/auth/change-password', { method: 'POST', json: { currentPassword, newPassword } }),
+  },
+  settings: {
+    get: () => request<Settings>('/settings'),
+    update: (patch: Partial<Omit<Settings, 'keys'>> & { ocrspaceKey?: string | null; geminiKey?: string | null }) =>
+      request<Settings>('/settings', { method: 'PUT', json: patch }),
+    test: (provider: 'ocrspace' | 'gemini') => request<{ ok: true; ms: number }>(`/settings/test/${provider}`, { method: 'POST' }),
+  },
+  ocr: (image: Blob, engine: Exclude<Engine, 'tesseract'>, language: string, signal?: AbortSignal) => {
+    const form = new FormData();
+    form.append('engine', engine);
+    form.append('language', language);
+    form.append('image', image, `page.${image.type.split('/')[1] ?? 'jpg'}`);
+    return request<{ text: string; ms: number }>('/ocr', { method: 'POST', body: form, signal });
+  },
+  groups: {
+    list: () => request<{ groups: Group[] }>('/groups'),
+    get: (id: number) => request<{ group: Group; scans: Scan[] }>(`/groups/${id}`),
+    create: (data: { title: string; description?: string; color?: GroupColor }) =>
+      request<{ group: Group }>('/groups', { method: 'POST', json: data }),
+    update: (id: number, data: Partial<Pick<Group, 'title' | 'description' | 'color'>>) =>
+      request<{ group: Group }>(`/groups/${id}`, { method: 'PATCH', json: data }),
+    reorder: (id: number, scanIds: number[]) => request<void>(`/groups/${id}/order`, { method: 'PUT', json: { scanIds } }),
+    remove: (id: number) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
+  },
+  scans: {
+    list: (params: { scope?: 'all' | 'individual'; limit?: number; offset?: number } = {}) =>
+      request<{ scans: Scan[]; total: number }>(`/scans${qs(params)}`),
+    get: (id: number) => request<{ scan: Scan }>(`/scans/${id}`),
+    create: (data: {
+      groupId?: number;
+      newGroup?: { title: string; description?: string; color?: GroupColor };
+      items: { title?: string; text: string; engine: ScanEngine; language: string }[];
+    }) => request<{ groupId: number | null; ids: number[] }>('/scans', { method: 'POST', json: data }),
+    update: (id: number, data: { title?: string; text?: string; groupId?: number | null }) =>
+      request<{ scan: Scan }>(`/scans/${id}`, { method: 'PATCH', json: data }),
+    remove: (id: number) => request<void>(`/scans/${id}`, { method: 'DELETE' }),
+  },
+  search: (q: string, groupId?: number) => request<{ results: SearchResult[] }>(`/search${qs({ q, groupId })}`),
+  stats: () => request<Stats>('/stats'),
+  analyses: {
+    list: (targetType: 'group' | 'scan', targetId: number) =>
+      request<{ analyses: Analysis[] }>(`/analyses${qs({ targetType, targetId })}`),
+    online: (targetType: 'group' | 'scan', targetId: number) =>
+      request<{ analysis: Analysis }>('/analyses/online', { method: 'POST', json: { targetType, targetId } }),
+    saveOffline: (targetType: 'group' | 'scan', targetId: number, content: object) =>
+      request<{ analysis: Analysis }>('/analyses/offline', { method: 'POST', json: { targetType, targetId, content } }),
+    remove: (id: number) => request<void>(`/analyses/${id}`, { method: 'DELETE' }),
+  },
+};

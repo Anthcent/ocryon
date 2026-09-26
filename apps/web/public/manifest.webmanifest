@@ -1,0 +1,11 @@
+{
+  "name": "Ocryon",
+  "short_name": "Ocryon",
+  "description": "Escanea libros con la cámara y conviértelos en texto buscable.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#58CC02",
+  "lang": "es",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

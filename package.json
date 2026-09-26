@@ -1,0 +1,22 @@
+{
+  "name": "ocryon",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Escaneo de libros con OCR (OCR.space, Gemini, Tesseract) para móvil y PC",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @ocryon/server\" \"npm run dev -w @ocryon/web\"",
+    "build": "npm run build -w @ocryon/web && npm run build -w @ocryon/server",
+    "start": "npm run start -w @ocryon/server",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

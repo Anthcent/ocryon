@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Nunito', ui-rounded, system-ui, sans-serif;
+
+  --color-feather: #58cc02;
+  --color-feather-dark: #58a700;
+  --color-feather-light: #d7ffb8;
+  --color-macaw: #1cb0f6;
+  --color-macaw-dark: #1899d6;
+  --color-macaw-light: #ddf4ff;
+  --color-cardinal: #ff4b4b;
+  --color-cardinal-dark: #ea2b2b;
+  --color-cardinal-light: #ffdfe0;
+  --color-bee: #ffc800;
+  --color-bee-dark: #e5a500;
+  --color-bee-light: #fff5d3;
+  --color-fox: #ff9600;
+  --color-fox-dark: #e08600;
+  --color-fox-light: #ffeed5;
+  --color-beetle: #ce82ff;
+  --color-beetle-dark: #a568cc;
+  --color-beetle-light: #f4e5ff;
+  --color-eel: #4b4b4b;
+  --color-wolf: #777777;
+  --color-hare: #afafaf;
+  --color-swan: #e5e5e5;
+  --color-polar: #f7f7f7;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-white font-sans text-eel antialiased;
+  }
+  ::selection {
+    @apply bg-macaw-light;
+  }
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+mark.hit {
+  @apply rounded bg-bee-light px-0.5 font-extrabold text-eel;
+}

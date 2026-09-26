@@ -20,3 +20,10 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+
+# Proyecto
+apps/server/data/
+*.db
+*.db-shm
+*.db-wal
+apps/web/public/tesseract/
