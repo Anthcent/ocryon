@@ -4,10 +4,10 @@ import { BAD_IMAGE, expectToast, pageImage, signUp, updateSettings } from './hel
 const cards = (page: Page) => page.getByTestId('page-card');
 const upload = (page: Page, files: string[]) => page.locator('input[type=file][multiple]').setInputFiles(files);
 
-/** En móvil los pasos están plegados; en escritorio siempre abiertos. */
+/** Los pasos empiezan plegados; se abren al pulsarlos. */
 async function openStep(page: Page, title: '¿Dónde se guarda?' | '¿Cómo escanear?') {
   const header = page.getByRole('button', { name: new RegExp(title.replace('?', '\\?')) });
-  if ((await header.getAttribute('aria-expanded')) === 'false' && (page.viewportSize()?.width ?? 0) < 1024) await header.click();
+  if ((await header.getAttribute('aria-expanded')) === 'false') await header.click();
 }
 
 async function chooseEngine(page: Page, name: 'OCR.space' | 'Gemini' | 'Tesseract') {

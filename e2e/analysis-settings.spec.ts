@@ -100,7 +100,7 @@ test.describe('Ajustes', () => {
 
     await page.goto('/escanear');
     const step = page.getByRole('button', { name: /¿Cómo escanear\?/ });
-    if ((await step.getAttribute('aria-expanded')) === 'false' && (page.viewportSize()?.width ?? 0) < 1024) await step.click();
+    if ((await step.getAttribute('aria-expanded')) === 'false') await step.click();
     await expect(page.getByRole('button', { name: /^Gemini/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('group', { name: 'Idioma del texto' }).getByRole('button', { name: 'Inglés' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('switch', { name: 'Escaneo automático' })).toHaveAttribute('aria-checked', 'true');

@@ -9,7 +9,17 @@ import type { Engine, Group, GroupColor, ScanEngine } from '../lib/types';
 import { CameraCapture } from '../scan/CameraCapture';
 import { PageGallery } from '../scan/PageGallery';
 import { PageViewer } from '../scan/PageViewer';
-import { DestinationStep, EngineStep, NEW_GROUP, type Mode } from '../scan/ScanSetup';
+import {
+  DestinationPanel,
+  destinationIcon,
+  destinationSummary,
+  EnginePanel,
+  engineIcon,
+  engineSummary,
+  NEW_GROUP,
+  StepHeader,
+  type Mode,
+} from '../scan/ScanSetup';
 import { useScanSession } from '../scan/ScanSession';
 import { useSettings } from '../settings/SettingsContext';
 
@@ -31,8 +41,8 @@ export function ScannerPage() {
   const [saving, setSaving] = useState(false);
   const [viewer, setViewer] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
-  // En móvil los pasos empiezan plegados (muestran su resumen) para que los botones de captura
-  // queden a la vista; se abren al tocarlos. En escritorio siempre están abiertos.
+  // Los pasos empiezan plegados (muestran lo elegido) para que los botones de captura
+  // queden a la vista; se abren al pulsarlos.
   const [openStep, setOpenStep] = useState<1 | 2 | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const systemCamera = useRef<HTMLInputElement>(null);
@@ -159,6 +169,17 @@ export function ScannerPage() {
 
   const toggle = (step: 1 | 2) => setOpenStep((s) => (s === step ? null : step));
 
+  const destination = { mode, setMode, groups, groupId, setGroupId, newTitle, setNewTitle, newColor, setNewColor };
+  const engineOptions = {
+    engine: session.engine,
+    setEngine: session.setEngine,
+    language: session.language,
+    setLanguage: session.setLanguage,
+    autoScan: session.autoScan,
+    setAutoScan: session.setAutoScan,
+    keysReady,
+  };
+
   return (
     <div className={clsx(pages.length > 0 && 'pb-28 lg:pb-24')}>
       <div className="mb-5">
@@ -166,131 +187,125 @@ export function ScannerPage() {
         <p className="mt-1 text-wolf">Elige cómo guardar, toma las fotos y conviértelas en texto.</p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        {/* Captura y páginas */}
-        <div className="space-y-4 lg:order-1">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className={clsx(
-              'rounded-3xl border-2 border-dashed p-3 transition sm:p-4',
-              dragging ? 'border-macaw bg-macaw-light' : 'border-swan',
-            )}
-          >
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setCameraOpen(true)}
-                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-b-[6px] border-feather-dark bg-feather px-3 py-5 text-white transition active:translate-y-[3px] active:border-b-2 sm:py-7"
-              >
-                <Camera className="size-10 sm:size-12" strokeWidth={2.25} />
-                <span className="text-sm font-extrabold uppercase tracking-wide sm:text-base">Tomar fotos</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-b-[6px] border-macaw-dark bg-macaw px-3 py-5 text-white transition active:translate-y-[3px] active:border-b-2 sm:py-7"
-              >
-                <ImagePlus className="size-10 sm:size-12" strokeWidth={2.25} />
-                <span className="text-sm font-extrabold uppercase tracking-wide sm:text-base">Subir imágenes</span>
-              </button>
-            </div>
-            <p className="mt-3 hidden items-center justify-center gap-2 text-sm font-bold text-hare sm:flex">
-              <Upload className="size-4" /> {dragging ? 'Suelta las imágenes aquí' : 'También puedes arrastrar imágenes aquí'}
-            </p>
-            {adding && (
-              <p className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-macaw">
-                <ScanLine className="size-4 animate-pulse" /> Preparando imágenes…
-              </p>
-            )}
+      <div className="space-y-4">
+        {/* Opciones arriba: dos botones con lo elegido; al pulsar uno se abren sus opciones debajo */}
+        <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <StepHeader
+              step={1}
+              title="¿Dónde se guarda?"
+              summary={destinationSummary(destination)}
+              icon={destinationIcon(mode)}
+              open={openStep === 1}
+              onToggle={() => toggle(1)}
+            />
+            <StepHeader
+              step={2}
+              title="¿Cómo escanear?"
+              summary={engineSummary(engineOptions)}
+              icon={engineIcon(session.engine)}
+              open={openStep === 2}
+              onToggle={() => toggle(2)}
+              warning={!keysReady[session.engine]}
+            />
           </div>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              void addFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
-          <input
-            ref={systemCamera}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={(e) => {
-              void addFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
+          {openStep === 1 && <DestinationPanel {...destination} />}
+          {openStep === 2 && <EnginePanel {...engineOptions} />}
+        </div>
 
-          {pages.length === 0 ? (
-            <Card className="flex flex-col items-center px-6 py-10 text-center">
-              <div className="mb-4 flex size-20 items-center justify-center rounded-3xl bg-polar text-hare">
-                <BookOpen className="size-10" />
-              </div>
-              <h3 className="text-xl font-black">Aún no hay páginas</h3>
-              <p className="mt-2 max-w-sm text-wolf">
-                Toma una foto por página. Puedes tomar varias seguidas: aparecerán aquí numeradas y podrás revisarlas antes de guardar.
-              </p>
-            </Card>
-          ) : (
-            <section>
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-xl font-black">
-                  Tus páginas
-                  <span className="rounded-xl bg-macaw-light px-2.5 py-0.5 text-base text-macaw-dark">{pages.length}</span>
-                </h2>
-                <Button variant="plain" size="sm" icon={<Trash2 className="size-4" />} onClick={clearAll} disabled={pages.every((p) => p.status === 'scanning')}>
-                  Quitar todas
-                </Button>
-              </div>
-              <PageGallery
-                pages={pages}
-                onOpen={(id) => setViewer(pages.findIndex((p) => p.id === id))}
-                onRemove={removePage}
-                onMove={session.move}
-                onScan={(id) => session.queue([id])}
-                onAdd={() => fileInput.current?.click()}
-              />
-            </section>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={clsx(
+            'rounded-3xl border-2 border-dashed p-3 transition sm:p-4',
+            dragging ? 'border-macaw bg-macaw-light' : 'border-swan',
+          )}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setCameraOpen(true)}
+              className="flex flex-col items-center gap-2 rounded-2xl border-2 border-b-[6px] border-feather-dark bg-feather px-3 py-5 text-white transition active:translate-y-[3px] active:border-b-2 sm:py-7"
+            >
+              <Camera className="size-10 sm:size-12" strokeWidth={2.25} />
+              <span className="text-sm font-extrabold uppercase tracking-wide sm:text-base">Tomar fotos</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="flex flex-col items-center gap-2 rounded-2xl border-2 border-b-[6px] border-macaw-dark bg-macaw px-3 py-5 text-white transition active:translate-y-[3px] active:border-b-2 sm:py-7"
+            >
+              <ImagePlus className="size-10 sm:size-12" strokeWidth={2.25} />
+              <span className="text-sm font-extrabold uppercase tracking-wide sm:text-base">Subir imágenes</span>
+            </button>
+          </div>
+          <p className="mt-3 hidden items-center justify-center gap-2 text-sm font-bold text-hare sm:flex">
+            <Upload className="size-4" /> {dragging ? 'Suelta las imágenes aquí' : 'También puedes arrastrar imágenes aquí'}
+          </p>
+          {adding && (
+            <p className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-macaw">
+              <ScanLine className="size-4 animate-pulse" /> Preparando imágenes…
+            </p>
           )}
         </div>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            void addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={systemCamera}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(e) => {
+            void addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
 
-        {/* Opciones: en escritorio siempre visibles a la derecha; en móvil, arriba y plegables */}
-        <div className="-order-1 space-y-3 lg:sticky lg:top-6 lg:order-2">
-          <DestinationStep
-            open={openStep === 1}
-            onToggle={() => toggle(1)}
-            mode={mode}
-            setMode={setMode}
-            groups={groups}
-            groupId={groupId}
-            setGroupId={setGroupId}
-            newTitle={newTitle}
-            setNewTitle={setNewTitle}
-            newColor={newColor}
-            setNewColor={setNewColor}
-          />
-          <EngineStep
-            open={openStep === 2}
-            onToggle={() => toggle(2)}
-            engine={session.engine}
-            setEngine={session.setEngine}
-            language={session.language}
-            setLanguage={session.setLanguage}
-            autoScan={session.autoScan}
-            setAutoScan={session.setAutoScan}
-            keysReady={keysReady}
-          />
-        </div>
+        {pages.length === 0 ? (
+          <Card className="flex flex-col items-center px-6 py-10 text-center">
+            <div className="mb-4 flex size-20 items-center justify-center rounded-3xl bg-polar text-hare">
+              <BookOpen className="size-10" />
+            </div>
+            <h3 className="text-xl font-black">Aún no hay páginas</h3>
+            <p className="mt-2 max-w-sm text-wolf">
+              Toma una foto por página. Puedes tomar varias seguidas: aparecerán aquí numeradas y podrás revisarlas antes de guardar.
+            </p>
+          </Card>
+        ) : (
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-xl font-black">
+                Tus páginas
+                <span className="rounded-xl bg-macaw-light px-2.5 py-0.5 text-base text-macaw-dark">{pages.length}</span>
+              </h2>
+              <Button variant="plain" size="sm" icon={<Trash2 className="size-4" />} onClick={clearAll} disabled={pages.every((p) => p.status === 'scanning')}>
+                Quitar todas
+              </Button>
+            </div>
+            <PageGallery
+              pages={pages}
+              onOpen={(id) => setViewer(pages.findIndex((p) => p.id === id))}
+              onRemove={removePage}
+              onMove={session.move}
+              onScan={(id) => session.queue([id])}
+              onAdd={() => fileInput.current?.click()}
+            />
+          </section>
+        )}
       </div>
 
       {/* Barra de acciones fija, siempre a la vista mientras hay páginas */}
