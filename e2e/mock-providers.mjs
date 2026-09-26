@@ -6,6 +6,9 @@ import http from 'node:http';
 
 const PORT = Number(process.env.MOCK_PORT ?? 4010);
 const INVALID = 'clave-invalida';
+// Pequeña espera para que en las pruebas se vea la barra de progreso, como con la API real.
+const DELAY_MS = Number(process.env.MOCK_DELAY_MS ?? 600);
+const wait = () => new Promise((r) => setTimeout(r, DELAY_MS));
 
 const ANALYSIS = {
   resumen: 'Un hidalgo de la Mancha pierde el juicio leyendo libros de caballerías.',
@@ -39,6 +42,7 @@ http
 
     if (req.method === 'POST' && req.url === '/parse/image') {
       if (req.headers.apikey === INVALID) return send(res, 403, 'The API key is invalid');
+      await wait();
       counter++;
       return send(res, 200, {
         IsErroredOnProcessing: false,
@@ -54,6 +58,7 @@ http
       }
       if (gemini[1] === 'modelo-inexistente') return send(res, 404, { error: { code: 404, message: 'model not found' } });
       const payload = JSON.parse(body.toString('utf8'));
+      await wait();
       const parts = payload.contents?.[0]?.parts ?? [];
       let text = 'ok';
       if (payload.generationConfig?.responseSchema) text = JSON.stringify(ANALYSIS);

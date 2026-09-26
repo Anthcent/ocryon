@@ -51,21 +51,28 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
       ],
     });
     await page.goto(`/catalogo/grupo/${groupId}`);
-    await expect(page.getByText('3 páginas ·')).toBeVisible();
+    await expect(page.getByText('3 páginas', { exact: true })).toBeVisible();
 
     // Bajar la primera: el nuevo orden persiste al recargar.
     const saved = page.waitForResponse((r) => r.url().includes('/order') && r.status() === 204);
-    await page.getByRole('button', { name: 'Bajar' }).first().click();
+    await page.getByRole('button', { name: 'Mover después' }).first().click();
     await saved;
     await page.reload();
     const titles = page.locator('a[href^="/escaneo/"] .truncate');
     await expect(titles).toHaveText(['Página 2', 'Página 1', 'Página 3']);
 
-    await page.getByRole('button', { name: 'Texto', exact: true }).click();
+    // Modo lectura: página a página, con barra de progreso y botones grandes.
+    await page.getByRole('button', { name: 'Leer', exact: true }).click();
     const article = page.locator('article');
+    await expect(page.getByText('Página 1 de 3')).toBeVisible();
     await expect(article).toContainText('Contenido de la segunda');
+    await page.getByRole('button', { name: 'Siguiente' }).click();
+    await expect(page.getByText('Página 2 de 3')).toBeVisible();
+    await expect(article).toContainText('Contenido de la primera');
+    await page.getByRole('button', { name: 'Todo seguido' }).click();
     const text = await article.innerText();
     expect(text.indexOf('segunda')).toBeLessThan(text.indexOf('primera'));
+    expect(text.indexOf('primera')).toBeLessThan(text.indexOf('tercera'));
 
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Exportar .txt' }).click();
@@ -100,11 +107,12 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
     await expect(page.getByText('1 / 2')).toBeVisible();
     await page.getByRole('button', { name: 'Página siguiente' }).click();
     await expect(page).toHaveURL(new RegExp(`/escaneo/${book.ids[1]}$`));
-    await expect(page.getByLabel('Texto escaneado')).toHaveValue('Capítulo dos');
+    await expect(page.getByLabel('Texto escaneado')).toHaveText('Capítulo dos');
     await page.getByRole('button', { name: 'Página anterior' }).click();
-    await expect(page.getByLabel('Texto escaneado')).toHaveValue('Capítulo uno');
+    await expect(page.getByLabel('Texto escaneado')).toHaveText('Capítulo uno');
 
-    // Editar título y texto.
+    // Editar título y texto (el texto se lee por defecto; «Editar» abre el editor).
+    await page.getByRole('button', { name: 'Editar', exact: true }).first().click();
     const save = page.getByRole('button', { name: 'Guardar', exact: true });
     await expect(save).toBeDisabled();
     await page.getByLabel('Título').fill('Capítulo I');
@@ -113,16 +121,19 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
     await expectToast(page, 'Cambios guardados');
     await expect(page.getByText('10 palabras')).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel('Título')).toHaveValue('Capítulo I');
+    await expect(page.getByRole('heading', { name: 'Capítulo I' })).toBeVisible();
+    await expect(page.getByLabel('Texto escaneado')).toContainText('Érase una vez');
 
     // Mover a otro grupo y luego dejarlo como individual.
-    await page.getByRole('combobox').selectOption({ label: 'Otro libro' });
+    await page.getByRole('button', { name: 'Mover', exact: true }).first().click();
+    await page.getByRole('dialog', { name: 'Mover a…' }).getByRole('button', { name: 'Otro libro' }).click();
     await expectToast(page, 'Movido a «Otro libro»');
     await expect(page.getByRole('link', { name: 'Otro libro' })).toBeVisible();
-    await page.getByRole('combobox').selectOption({ label: 'Ninguno (individual)' });
+    await page.getByRole('button', { name: 'Mover', exact: true }).first().click();
+    await page.getByRole('dialog', { name: 'Mover a…' }).getByRole('button', { name: 'Ninguno (individual)' }).click();
     await expectToast(page, 'Ahora es un escaneo individual');
 
-    await page.getByRole('button', { name: 'Borrar' }).click();
+    await page.getByRole('button', { name: 'Borrar', exact: true }).first().click();
     await page.getByRole('dialog').getByRole('button', { name: 'Borrar' }).click();
     await expect(page).toHaveURL(/\/catalogo\?vista=individuales$/);
     await expect(page.getByText('Sin escaneos individuales')).toBeVisible();
@@ -169,6 +180,6 @@ test.describe('Búsqueda', () => {
     await page.getByLabel('Buscar').fill('coronel');
     await page.locator('mark.hit').click();
     await expect(page).toHaveURL(/\/escaneo\/\d+$/);
-    await expect(page.getByLabel('Texto escaneado')).toHaveValue(/Aureliano/);
+    await expect(page.getByLabel('Texto escaneado')).toContainText('Aureliano');
   });
 });

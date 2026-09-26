@@ -1,14 +1,17 @@
 import clsx from 'clsx';
 import { ChevronLeft, ChevronRight, CircleAlert, RotateCw, ScanLine, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Button, Spinner, Textarea } from '../components/ui';
+import { Button, Textarea } from '../components/ui';
 import { ENGINE_LABEL } from '../lib/constants';
 import type { PendingPage } from '../lib/pages-store';
+import { ScanProgressBar } from './ScanProgressBar';
+import type { ScanProgress } from './ScanSession';
 import { STATUS } from './status';
 import { useObjectUrl } from './useObjectUrl';
 
 interface Props {
   pages: PendingPage[];
+  progress: Record<string, ScanProgress>;
   index: number;
   onIndex: (i: number) => void;
   onClose: () => void;
@@ -19,7 +22,7 @@ interface Props {
 }
 
 /** Visor a pantalla completa: ver la foto en grande, recorrer páginas y todas sus opciones. */
-export function PageViewer({ pages, index, onIndex, onClose, onSaveText, onScan, onRotate, onRemove }: Props) {
+export function PageViewer({ pages, progress, index, onIndex, onClose, onSaveText, onScan, onRotate, onRemove }: Props) {
   const page = pages[index];
   const url = useObjectUrl(page?.image);
   const [text, setText] = useState(page?.text ?? '');
@@ -62,8 +65,8 @@ export function PageViewer({ pages, index, onIndex, onClose, onSaveText, onScan,
         <div className="relative min-h-0 flex-1">
           {url && <img src={url} alt={`Página ${index + 1}`} className="absolute inset-0 size-full object-contain p-2" />}
           {page.status === 'scanning' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Spinner className="size-12 text-white" />
+            <div className="absolute inset-x-4 bottom-4 mx-auto max-w-md rounded-2xl bg-eel/85 p-3 backdrop-blur">
+              <ScanProgressBar progress={progress[page.id]} dark />
             </div>
           )}
           <button

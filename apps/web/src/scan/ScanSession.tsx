@@ -5,8 +5,16 @@ import { loadPages, savePages, type PendingPage } from '../lib/pages-store';
 import { tesseractRecognize } from '../lib/tesseract';
 import type { Engine } from '../lib/types';
 
+/** Avance del escaneo de una página (0 a 1) y qué se está haciendo. */
+export interface ScanProgress {
+  value: number;
+  label: string;
+}
+
 interface ScanSession {
   pages: PendingPage[];
+  /** Solo para las páginas que se están escaneando ahora mismo. */
+  progress: Record<string, ScanProgress>;
   ready: boolean;
   engine: Engine;
   language: string;
@@ -44,6 +52,8 @@ export function ScanSessionProvider({
   defaults: { engine: Engine; language: string; autoScan: boolean };
 }) {
   const [pages, setPages] = useState<PendingPage[]>([]);
+  // El progreso va aparte de las páginas: cambia muchas veces por segundo y no debe guardarse en IndexedDB.
+  const [progress, setProgress] = useState<Record<string, ScanProgress>>({});
   const [ready, setReady] = useState(false);
   const [engine, setEngine] = useState<Engine>(defaults.engine);
   const [language, setLanguage] = useState(defaults.language);
@@ -79,16 +89,37 @@ export function ScanSessionProvider({
 
     running.current = true;
     patch(next.id, { status: 'scanning', error: undefined });
+    const report = (value: number, label: string) =>
+      setProgress((all) => ({ ...all, [next.id]: { value: Math.min(1, Math.max(0, value)), label } }));
+    report(0.02, 'Preparando…');
+    let timer: ReturnType<typeof setInterval> | undefined;
 
     (async () => {
       try {
         if (engine !== 'tesseract' && !navigator.onLine) {
           throw new ApiError(0, 'Sin conexión: usa Tesseract para escanear sin internet', 'offline');
         }
-        const text =
-          engine === 'tesseract'
-            ? await tesseractRecognize(next.image, language)
-            : (await api.ocr(next.image, engine, language)).text;
+        let text: string;
+        if (engine === 'tesseract') {
+          text = await tesseractRecognize(next.image, language, report);
+        } else {
+          // La subida tiene progreso real (0–40 %); el procesado en el servidor se estima
+          // acercándose poco a poco al 95 % hasta que llega la respuesta.
+          let current = 0.02;
+          let processing = false;
+          timer = setInterval(() => {
+            if (!processing) return;
+            current += (0.95 - current) * 0.06;
+            report(current, 'Leyendo texto…');
+          }, 200);
+          const result = await api.ocr(next.image, engine, language, (fraction) => {
+            current = 0.02 + fraction * 0.38;
+            report(current, 'Subiendo imagen…');
+            if (fraction >= 1) processing = true;
+          });
+          text = result.text;
+        }
+        report(1, 'Listo');
         patch(next.id, {
           status: 'done',
           text,
@@ -102,6 +133,8 @@ export function ScanSessionProvider({
           setPages((all) => all.map((p) => (p.status === 'queued' ? { ...p, status: 'pending' } : p)));
         }
       } finally {
+        clearInterval(timer);
+        setProgress(({ [next.id]: _done, ...rest }) => rest);
         running.current = false;
         // Fuerza una nueva evaluación de la cola.
         setPages((all) => [...all]);
@@ -179,7 +212,7 @@ export function ScanSessionProvider({
 
   return (
     <ScanSessionContext.Provider
-      value={{ pages, ready, engine, language, autoScan, setEngine, setLanguage, setAutoScan, addImages, queue, updateText, remove, removeMany, move, rotate }}
+      value={{ pages, progress, ready, engine, language, autoScan, setEngine, setLanguage, setAutoScan, addImages, queue, updateText, remove, removeMany, move, rotate }}
     >
       {children}
     </ScanSessionContext.Provider>

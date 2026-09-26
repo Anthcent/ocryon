@@ -41,6 +41,7 @@ test.describe('Análisis', () => {
     await signUp(page);
     const { ids } = await createScans(page, { items: [{ text: LONG_TEXT, engine: 'manual' }] });
     await page.goto(`/escaneo/${ids[0]}`);
+    await page.getByRole('button', { name: 'Análisis', exact: true }).click();
     await page.getByRole('button', { name: 'Rápido (sin conexión)' }).click();
     await expect(page.getByText('Frases principales')).toBeVisible();
   });

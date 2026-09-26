@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { BookOpen, ChevronRight, FileText, Plus, ScanLine } from 'lucide-react';
+import { BookOpen, FileText, Plus, ScanLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
@@ -147,25 +147,30 @@ function IndividualList({ filter }: { filter: string }) {
 
   const visible = scans.filter((s) => matches(s.title, filter));
   return (
-    <div className="space-y-3">
-      {visible.map((s) => (
-        <Link key={s.id} to={`/escaneo/${s.id}`} className="block">
-          <Card interactive className="flex items-center gap-4 p-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-beetle-light text-beetle-dark">
-              <FileText className="size-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-extrabold">{s.title}</div>
-              <p className="line-clamp-1 text-sm text-wolf">{s.text}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <Badge>{ENGINE_LABEL[s.engine]}</Badge>
-                <span className="text-xs font-bold text-hare">{timeAgo(s.createdAt)}</span>
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {visible.map((s) => (
+          <Link key={s.id} to={`/escaneo/${s.id}`} className="block">
+            <Card interactive className="flex h-full flex-col p-4">
+              <div className="mb-2 flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-beetle-light text-beetle-dark">
+                  <FileText className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-extrabold">{s.title}</div>
+                  <div className="text-xs font-bold text-hare">{timeAgo(s.createdAt)}</div>
+                </div>
               </div>
-            </div>
-            <ChevronRight className="size-5 shrink-0 text-hare" />
-          </Card>
-        </Link>
-      ))}
+              {/* Vista previa del texto, como una nota */}
+              <p className="line-clamp-3 flex-1 font-serif text-sm leading-relaxed text-wolf">{s.text}</p>
+              <div className="mt-3 flex items-center gap-2">
+                <Badge>{ENGINE_LABEL[s.engine]}</Badge>
+                <span className="text-xs font-bold text-hare">{s.wordCount} palabras</span>
+              </div>
+            </Card>
+          </Link>
+        ))}
+      </div>
       {scans.length < total && (
         <Button variant="plain" block loading={loadingMore} onClick={loadMore}>
           Cargar más

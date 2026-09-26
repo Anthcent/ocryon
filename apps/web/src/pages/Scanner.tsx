@@ -67,6 +67,10 @@ export function ScannerPage() {
   const busy = pages.some((p) => p.status === 'queued' || p.status === 'scanning');
   const scannable = pages.filter((p) => p.status === 'pending' || p.status === 'error');
   const finished = pages.filter((p) => p.status === 'done' || p.status === 'error').length;
+  // El avance global incluye la parte ya hecha de la página que se está escaneando.
+  const partial = Object.values(session.progress).reduce((sum, p) => sum + p.value, 0);
+  const overall = pages.length ? ((finished + partial) / pages.length) * 100 : 0;
+  const scanningNow = pages.findIndex((p) => p.status === 'scanning');
 
   const keysReady: Record<Engine, boolean> = {
     ocrspace: settings.keys.ocrspace.configured,
@@ -300,6 +304,7 @@ export function ScannerPage() {
             </div>
             <PageGallery
               pages={pages}
+              progress={session.progress}
               onOpen={(id) => setViewer(pages.findIndex((p) => p.id === id))}
               onRemove={removePage}
               onMove={session.move}
@@ -317,8 +322,9 @@ export function ScannerPage() {
             <div className="flex items-center gap-3 sm:flex-1">
               <span className="shrink-0 text-sm font-extrabold">
                 {finished} de {pages.length} escaneadas
+                {scanningNow >= 0 && <span className="ml-1 font-bold text-macaw-dark">· página {scanningNow + 1}…</span>}
               </span>
-              <ProgressBar value={(finished / pages.length) * 100} className="h-3" />
+              <ProgressBar value={overall} className="h-3" />
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button variant="secondary" icon={<ScanLine className="hidden size-5 sm:block" />} className="whitespace-nowrap" disabled={scannable.length === 0} onClick={() => session.queue()}>
@@ -337,6 +343,7 @@ export function ScannerPage() {
       {viewer !== null && pages[viewer] && (
         <PageViewer
           pages={pages}
+          progress={session.progress}
           index={viewer}
           onIndex={setViewer}
           onClose={() => setViewer(null)}

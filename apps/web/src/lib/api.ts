@@ -49,6 +49,30 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown } =
   return data as T;
 }
 
+/** Como `request`, pero con XMLHttpRequest para conocer el avance de la subida (fetch no lo ofrece). */
+function uploadWithProgress<T>(path: string, body: FormData, onUpload?: (fraction: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api${path}`);
+    xhr.setRequestHeader('X-Requested-With', 'ocryon');
+    xhr.upload.onprogress = (e) => e.lengthComputable && onUpload?.(e.loaded / e.total);
+    xhr.upload.onloadend = () => onUpload?.(1);
+    xhr.onerror = () => reject(new ApiError(0, 'Sin conexión con el servidor', 'offline'));
+    xhr.onload = () => {
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        // respuesta vacía o no JSON
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data as T);
+      if (xhr.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      reject(new ApiError(xhr.status, (data.error as string) ?? `Error ${xhr.status}`, data.code as string | undefined));
+    };
+    xhr.send(body);
+  });
+}
+
 const qs = (params: Record<string, string | number | undefined>) => {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== '') as [string, string][];
   return entries.length ? `?${new URLSearchParams(entries)}` : '';
@@ -70,12 +94,13 @@ export const api = {
       request<Settings>('/settings', { method: 'PUT', json: patch }),
     test: (provider: 'ocrspace' | 'gemini') => request<{ ok: true; ms: number }>(`/settings/test/${provider}`, { method: 'POST' }),
   },
-  ocr: (image: Blob, engine: Exclude<Engine, 'tesseract'>, language: string, signal?: AbortSignal) => {
+  /** OCR en el servidor; `onUpload` recibe el avance de la subida de la imagen (0 a 1). */
+  ocr: (image: Blob, engine: Exclude<Engine, 'tesseract'>, language: string, onUpload?: (fraction: number) => void) => {
     const form = new FormData();
     form.append('engine', engine);
     form.append('language', language);
     form.append('image', image, `page.${image.type.split('/')[1] ?? 'jpg'}`);
-    return request<{ text: string; ms: number }>('/ocr', { method: 'POST', body: form, signal });
+    return uploadWithProgress<{ text: string; ms: number }>('/ocr', form, onUpload);
   },
   groups: {
     list: () => request<{ groups: Group[] }>('/groups'),

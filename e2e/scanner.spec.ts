@@ -45,8 +45,11 @@ test.describe('Escáner', () => {
     await expect(page.getByText('1 de 3 escaneadas')).toBeVisible();
     await expect(cards(page).nth(1).getByText('Sin escanear')).toBeVisible();
 
-    // Escanear el resto de golpe.
+    // Escanear el resto de golpe: mientras tanto se ve una barra de progreso, no un spinner.
     await page.getByRole('button', { name: 'Escanear (2)' }).click();
+    const bar = cards(page).getByRole('progressbar').first();
+    await expect(bar).toBeVisible();
+    await expect(bar).toHaveAttribute('aria-valuenow', /^[1-9]\d*$/);
     await expect(page.getByText('3 de 3 escaneadas')).toBeVisible();
 
     // Corregir el texto de la segunda página desde el visor.
@@ -175,7 +178,7 @@ test.describe('Escáner', () => {
     await page.getByRole('button', { name: 'Guardar (1)' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/catalogo/grupo/${groupId}$`));
-    await expect(page.getByText('2 páginas ·')).toBeVisible();
+    await expect(page.getByText('2 páginas', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: /Página 2/ })).toBeVisible();
   });
 

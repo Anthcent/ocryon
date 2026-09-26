@@ -144,9 +144,9 @@ export function AnalysisPanel({ targetType, targetId, text }: Props) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
   return (
-    <section className="space-y-2">
+    <section className={clsx('space-y-2', wide && 'md:col-span-2')}>
       <h3 className="text-sm font-black uppercase tracking-wide text-hare">{title}</h3>
       {children}
     </section>
@@ -164,8 +164,8 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 
 function OfflineView({ a }: { a: OfflineAnalysis }) {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:col-span-2">
         <Stat label="Palabras" value={formatNumber(a.palabras)} />
         <Stat label="Oraciones" value={formatNumber(a.oraciones)} />
         <Stat label="Min. de lectura" value={a.minutosLectura} />
@@ -194,7 +194,7 @@ function OfflineView({ a }: { a: OfflineAnalysis }) {
         </Section>
       )}
       {a.resumen.length > 0 && (
-        <Section title="Frases principales">
+        <Section title="Frases principales" wide>
           <ul className="space-y-2">
             {a.resumen.map((s, i) => (
               <li key={i} className="rounded-2xl bg-polar p-3 text-sm leading-relaxed">
@@ -223,9 +223,13 @@ function List({ items }: { items: string[] }) {
 
 function OnlineView({ a }: { a: OnlineAnalysisContent }) {
   return (
-    <div className="space-y-6">
-      {a.truncated && <Badge tone="yellow">El texto era muy largo: se analizó la primera parte</Badge>}
-      <Section title="Resumen">
+    <div className="grid gap-6 md:grid-cols-2">
+      {a.truncated && (
+        <div className="md:col-span-2">
+          <Badge tone="yellow">El texto era muy largo: se analizó la primera parte</Badge>
+        </div>
+      )}
+      <Section title="Resumen" wide>
         <p className="whitespace-pre-line leading-relaxed">{a.resumen}</p>
       </Section>
       {a.temas?.length > 0 && (
@@ -256,8 +260,8 @@ function OnlineView({ a }: { a: OnlineAnalysisContent }) {
         </Section>
       )}
       {a.vocabulario?.length > 0 && (
-        <Section title="Vocabulario">
-          <dl className="grid gap-2 sm:grid-cols-2">
+        <Section title="Vocabulario" wide>
+          <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {a.vocabulario.map((v) => (
               <div key={v.termino} className="rounded-2xl bg-polar p-3">
                 <dt className="font-extrabold">{v.termino}</dt>
@@ -272,14 +276,12 @@ function OnlineView({ a }: { a: OnlineAnalysisContent }) {
           <List items={a.preguntas} />
         </Section>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Section title="Tono">
-          <p>{a.tono}</p>
-        </Section>
-        <Section title="Calidad del OCR">
-          <p className="text-sm text-wolf">{a.calidadOcr}</p>
-        </Section>
-      </div>
+      <Section title="Tono">
+        <p>{a.tono}</p>
+      </Section>
+      <Section title="Calidad del OCR">
+        <p className="text-sm text-wolf">{a.calidadOcr}</p>
+      </Section>
     </div>
   );
 }

@@ -1,12 +1,14 @@
 import clsx from 'clsx';
 import { ChevronLeft, ChevronRight, CircleAlert, ImagePlus, X } from 'lucide-react';
-import { Spinner } from '../components/ui';
 import type { PendingPage } from '../lib/pages-store';
+import { ScanProgressBar } from './ScanProgressBar';
+import type { ScanProgress } from './ScanSession';
 import { STATUS } from './status';
 import { useObjectUrl } from './useObjectUrl';
 
 interface Props {
   pages: PendingPage[];
+  progress: Record<string, ScanProgress>;
   onOpen: (id: string) => void;
   onRemove: (id: string) => void;
   onMove: (id: string, delta: number) => void;
@@ -15,13 +17,14 @@ interface Props {
 }
 
 /** Galería de las fotos cargadas, numeradas en el orden en que se guardarán. */
-export function PageGallery({ pages, onOpen, onRemove, onMove, onScan, onAdd }: Props) {
+export function PageGallery({ pages, progress, onOpen, onRemove, onMove, onScan, onAdd }: Props) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
       {pages.map((page, i) => (
         <PageThumb
           key={page.id}
           page={page}
+          progress={progress[page.id]}
           index={i}
           total={pages.length}
           onOpen={() => onOpen(page.id)}
@@ -44,6 +47,7 @@ export function PageGallery({ pages, onOpen, onRemove, onMove, onScan, onAdd }: 
 
 function PageThumb({
   page,
+  progress,
   index,
   total,
   onOpen,
@@ -52,6 +56,7 @@ function PageThumb({
   onScan,
 }: {
   page: PendingPage;
+  progress?: ScanProgress;
   index: number;
   total: number;
   onOpen: () => void;
@@ -88,13 +93,14 @@ function PageThumb({
         >
           <X className="size-5" strokeWidth={3} />
         </button>
-        <span className={clsx('pointer-events-none absolute bottom-2 left-2 rounded-lg px-2 py-0.5 text-xs font-extrabold uppercase shadow', status.pill)}>
-          {status.label}
-        </span>
-        {page.status === 'scanning' && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/60">
-            <Spinner className="size-10" />
+        {page.status === 'scanning' ? (
+          <div className="pointer-events-none absolute inset-x-2 bottom-2 rounded-xl bg-white/95 p-2 shadow-lg">
+            <ScanProgressBar progress={progress} />
           </div>
+        ) : (
+          <span className={clsx('pointer-events-none absolute bottom-2 left-2 rounded-lg px-2 py-0.5 text-xs font-extrabold uppercase shadow', status.pill)}>
+            {status.label}
+          </span>
         )}
       </div>
 

@@ -3,6 +3,8 @@ import { Check, Flashlight, FlashlightOff, X, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { PendingPage } from '../lib/pages-store';
 import { useScanSession } from './ScanSession';
+import { ScanProgressBar } from './ScanProgressBar';
+import type { ScanProgress } from './ScanSession';
 import { STATUS } from './status';
 import { useObjectUrl } from './useObjectUrl';
 
@@ -139,7 +141,7 @@ export function CameraCapture({ onClose, onUnavailable }: Props) {
       {count > 0 && (
         <div ref={stripRef} className="flex gap-2 overflow-x-auto px-4 pt-3" aria-label="Fotos tomadas">
           {captured.map((p, i) => (
-            <CapturedThumb key={p.id} page={p} n={offset + i + 1} onRemove={() => session.remove(p.id)} />
+            <CapturedThumb key={p.id} page={p} progress={session.progress[p.id]} n={offset + i + 1} onRemove={() => session.remove(p.id)} />
           ))}
         </div>
       )}
@@ -169,13 +171,19 @@ export function CameraCapture({ onClose, onUnavailable }: Props) {
   );
 }
 
-function CapturedThumb({ page, n, onRemove }: { page: PendingPage; n: number; onRemove: () => void }) {
+function CapturedThumb({ page, progress, n, onRemove }: { page: PendingPage; progress?: ScanProgress; n: number; onRemove: () => void }) {
   const url = useObjectUrl(page.image);
   return (
     <div className="relative h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-xl border-2 border-white/60 bg-white/10">
       {url && <img src={url} alt={`Foto ${n}`} className="size-full object-cover" />}
       <span className="absolute bottom-1 left-1 flex size-6 items-center justify-center rounded-md bg-white text-xs font-black text-eel">{n}</span>
-      <span className={clsx('absolute bottom-1.5 right-1.5 size-3 rounded-full ring-2 ring-white', STATUS[page.status].dot)} />
+      {page.status === 'scanning' ? (
+        <div className="absolute inset-x-1 bottom-8">
+          <ScanProgressBar progress={progress} size="sm" dark />
+        </div>
+      ) : (
+        <span className={clsx('absolute bottom-1.5 right-1.5 size-3 rounded-full ring-2 ring-white', STATUS[page.status].dot)} />
+      )}
       <button
         onClick={onRemove}
         disabled={page.status === 'scanning'}
