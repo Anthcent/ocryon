@@ -12,7 +12,23 @@ const groupSchema = z.object({
   color: z.enum(GROUP_COLORS).default('green'),
 });
 
+// Sin valores por defecto: en una edición parcial, lo que no se envía se conserva.
+const updateSchema = z.object({
+  title: z.string().trim().min(1, 'El grupo necesita un nombre').max(160).optional(),
+  description: z.string().trim().max(2000).optional(),
+  color: z.enum(GROUP_COLORS).optional(),
+});
+
 const idParam = z.coerce.number().int().positive();
+
+interface GroupRow {
+  id: number;
+  title: string;
+  description: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export function groupsRouter(ctx: AppContext) {
   const router = Router();
@@ -22,7 +38,7 @@ export function groupsRouter(ctx: AppContext) {
       .prepare('SELECT id, title, description, color, created_at AS createdAt, updated_at AS updatedAt FROM groups WHERE id = ? AND user_id = ?')
       .get(id, userId);
     if (!group) throw notFound('Grupo');
-    return group as Record<string, unknown>;
+    return group as unknown as GroupRow;
   };
 
   router.get('/', (req, res) => {
@@ -65,7 +81,7 @@ export function groupsRouter(ctx: AppContext) {
   router.patch('/:id', (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    const data = groupSchema.partial().parse(req.body);
+    const data = updateSchema.parse(req.body);
     const current = findGroup(userId, id);
     ctx.db
       .prepare(`UPDATE groups SET title = ?, description = ?, color = ?, updated_at = datetime('now') WHERE id = ?`)

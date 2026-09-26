@@ -14,7 +14,7 @@
     "test": "npm run test --workspaces --if-present"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

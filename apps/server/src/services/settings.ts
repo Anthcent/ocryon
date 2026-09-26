@@ -16,7 +16,7 @@ interface SettingsRow {
 
 export function loadSettingsRow(ctx: AppContext, userId: number): SettingsRow {
   ctx.db.prepare('INSERT OR IGNORE INTO settings (user_id) VALUES (?)').run(userId);
-  return ctx.db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId) as SettingsRow;
+  return ctx.db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId) as unknown as SettingsRow;
 }
 
 function decryptOrEmpty(ctx: AppContext, value: string | null): string {

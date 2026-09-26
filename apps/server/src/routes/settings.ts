@@ -1,3 +1,4 @@
+import type { SQLInputValue } from 'node:sqlite';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
@@ -38,8 +39,8 @@ export function settingsRouter(ctx: AppContext) {
     loadSettingsRow(ctx, userId);
 
     const sets: string[] = [];
-    const values: unknown[] = [];
-    const set = (column: string, value: unknown) => {
+    const values: SQLInputValue[] = [];
+    const set = (column: string, value: SQLInputValue) => {
       sets.push(`${column} = ?`);
       values.push(value);
     };

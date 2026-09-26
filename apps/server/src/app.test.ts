@@ -103,6 +103,18 @@ describe('escaneos, grupos y búsqueda', () => {
     expect(list.body.groups[0]).toMatchObject({ scanCount: 2, wordCount: 15 });
   });
 
+  it('la edición parcial de un grupo conserva los campos no enviados', async () => {
+    const { agent, post } = await registered();
+    const { body } = await post('/api/groups', { title: 'Libro', description: 'Notas', color: 'purple' }).expect(201);
+    const res = await agent.patch(`/api/groups/${body.group.id}`).set('X-Requested-With', 'ocryon').send({ title: 'Libro 2' }).expect(200);
+    expect(res.body.group).toMatchObject({ title: 'Libro 2', description: 'Notas', color: 'purple' });
+  });
+
+  it('login con correo inexistente responde 401 (no 500)', async () => {
+    const { post } = setup();
+    await post('/api/auth/login', { email: 'nadie@example.com', password: 'loquesea' }).expect(401);
+  });
+
   it('guarda escaneos individuales y actualiza el índice al editar', async () => {
     const { agent, post } = await registered();
     const saved = await post('/api/scans', { items: [{ text: 'Receta de pan casero\nHarina y agua', engine: 'tesseract' }] }).expect(201);
