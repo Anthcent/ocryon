@@ -31,6 +31,15 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    /* Que la cabecera y las barras fijas no tapen lo que se enfoca o se desplaza a la vista */
+    scroll-padding-top: 4.5rem;
+    scroll-padding-bottom: 10rem;
+  }
+  @media (min-width: 1024px) {
+    html {
+      scroll-padding-top: 1rem;
+      scroll-padding-bottom: 6rem;
+    }
   }
   body {
     @apply bg-white font-sans text-eel antialiased;

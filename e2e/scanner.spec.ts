@@ -6,7 +6,8 @@ const upload = (page: Page, files: string[]) => page.locator('input[type=file][m
 
 /** Los pasos empiezan plegados; se abren al pulsarlos. */
 async function openStep(page: Page, title: '¿Dónde se guarda?' | '¿Cómo escanear?') {
-  const header = page.getByRole('button', { name: new RegExp(title.replace('?', '\\?')) });
+  // En móvil el título es corto («¿Dónde?», «¿Cómo?»), así que se busca por su primera palabra.
+  const header = page.getByRole('button', { name: new RegExp(title.split(' ')[0]) });
   if ((await header.getAttribute('aria-expanded')) === 'false') await header.click();
 }
 
@@ -20,7 +21,7 @@ test.describe('Escáner', () => {
     await signUp(page);
     await page.goto('/escanear');
     // Visible incluso con el paso plegado.
-    await expect(page.getByText(/falta la API key/i).locator('visible=true').first()).toBeVisible();
+    await expect(page.getByText(/sin API key/i).locator('visible=true').first()).toBeVisible();
     await chooseEngine(page, 'Tesseract');
     await expect(page.getByText('Para usar OCR.space necesitas su API key')).toBeHidden();
   });

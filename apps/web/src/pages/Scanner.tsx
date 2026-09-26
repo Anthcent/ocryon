@@ -190,10 +190,11 @@ export function ScannerPage() {
       <div className="space-y-4">
         {/* Opciones arriba: dos botones con lo elegido; al pulsar uno se abren sus opciones debajo */}
         <div className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <StepHeader
               step={1}
               title="¿Dónde se guarda?"
+              shortTitle="¿Dónde?"
               summary={destinationSummary(destination)}
               icon={destinationIcon(mode)}
               open={openStep === 1}
@@ -202,6 +203,7 @@ export function ScannerPage() {
             <StepHeader
               step={2}
               title="¿Cómo escanear?"
+              shortTitle="¿Cómo?"
               summary={engineSummary(engineOptions)}
               icon={engineIcon(session.engine)}
               open={openStep === 2}

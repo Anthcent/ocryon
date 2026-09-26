@@ -16,6 +16,7 @@ export const NEW_GROUP = 'new';
 export function StepHeader({
   step,
   title,
+  shortTitle,
   summary,
   icon,
   open,
@@ -24,6 +25,8 @@ export function StepHeader({
 }: {
   step: number;
   title: string;
+  /** Título corto para móvil, donde los dos pasos van lado a lado. */
+  shortTitle: string;
   summary: ReactNode;
   icon: ReactNode;
   open: boolean;
@@ -36,24 +39,30 @@ export function StepHeader({
       onClick={onToggle}
       aria-expanded={open}
       className={clsx(
-        'flex w-full items-center gap-3 rounded-2xl border-2 border-b-4 p-3 text-left transition active:translate-y-[2px] active:border-b-2 sm:p-4',
+        'flex w-full items-center gap-2 rounded-2xl border-2 border-b-4 p-2.5 text-left transition active:translate-y-[2px] active:border-b-2 sm:gap-3 sm:p-4',
         open ? 'border-macaw bg-macaw-light' : 'border-swan bg-white hover:bg-polar',
       )}
     >
       <span className="relative shrink-0">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-polar text-eel [&>svg]:size-7">{icon}</span>
-        <span className="absolute -left-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full bg-macaw text-xs font-black text-white shadow-[0_2px_0_#1899d6]">
+        <span className="flex size-10 items-center justify-center rounded-xl bg-polar text-eel sm:size-12 sm:rounded-2xl [&>svg]:size-6 sm:[&>svg]:size-7">{icon}</span>
+        <span className="absolute -left-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-macaw text-[11px] font-black text-white shadow-[0_2px_0_#1899d6] sm:size-6 sm:text-xs">
           {step}
         </span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-extrabold uppercase tracking-wide text-hare">{title}</span>
-        <span className={clsx('block truncate text-lg font-black leading-tight', warning ? 'text-bee-dark' : 'text-eel')}>{summary}</span>
+        <span className="block truncate text-[11px] font-extrabold uppercase tracking-wide text-hare sm:text-xs">
+          <span className="sm:hidden">{shortTitle}</span>
+          <span className="hidden sm:inline">{title}</span>
+        </span>
+        {/* En móvil el resumen ocupa hasta dos líneas porque los pasos van lado a lado */}
+        <span className={clsx('line-clamp-2 text-sm font-black leading-tight sm:line-clamp-1 sm:text-lg', warning ? 'text-bee-dark' : 'text-eel')}>
+          {summary}
+        </span>
       </span>
-      <span className={clsx('hidden text-sm font-extrabold uppercase sm:block', open ? 'text-macaw-dark' : 'text-macaw')}>
+      <span className={clsx('hidden text-sm font-extrabold uppercase lg:block', open ? 'text-macaw-dark' : 'text-macaw')}>
         {open ? 'Listo' : 'Cambiar'}
       </span>
-      <ChevronDown className={clsx('size-6 shrink-0 text-hare transition', open && 'rotate-180 text-macaw-dark')} />
+      <ChevronDown className={clsx('size-5 shrink-0 text-hare transition sm:size-6', open && 'rotate-180 text-macaw-dark')} />
     </button>
   );
 }
@@ -235,7 +244,7 @@ export interface EngineProps {
 }
 
 export function engineSummary({ engine, language, autoScan, keysReady }: EngineProps) {
-  if (!keysReady[engine]) return `${ENGINES[engine].label}: falta la API key`;
+  if (!keysReady[engine]) return `${ENGINES[engine].label} · sin API key`;
   const lang = LANGUAGES.find((l) => l.code === language)?.label ?? language;
   return `${ENGINES[engine].label} · ${lang}${autoScan ? ' · automático' : ''}`;
 }
