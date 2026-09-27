@@ -85,7 +85,7 @@ export function AnalysisPanel({ targetType, targetId, text }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button variant="plain" icon={<Gauge className="size-5" />} loading={running === 'offline'} disabled={tooShort || running !== null} onClick={runOffline}>
           Rápido (sin conexión)
         </Button>
@@ -164,7 +164,7 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 
 function OfflineView({ a }: { a: OfflineAnalysis }) {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:col-span-2">
         <Stat label="Palabras" value={formatNumber(a.palabras)} />
         <Stat label="Oraciones" value={formatNumber(a.oraciones)} />
@@ -223,7 +223,7 @@ function List({ items }: { items: string[] }) {
 
 function OnlineView({ a }: { a: OnlineAnalysisContent }) {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
       {a.truncated && (
         <div className="md:col-span-2">
           <Badge tone="yellow">El texto era muy largo: se analizó la primera parte</Badge>
@@ -261,7 +261,7 @@ function OnlineView({ a }: { a: OnlineAnalysisContent }) {
       )}
       {a.vocabulario?.length > 0 && (
         <Section title="Vocabulario" wide>
-          <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {a.vocabulario.map((v) => (
               <div key={v.termino} className="rounded-2xl bg-polar p-3">
                 <dt className="font-extrabold">{v.termino}</dt>

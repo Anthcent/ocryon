@@ -26,7 +26,11 @@ export interface Group {
   id: number;
   title: string;
   description: string;
+  author: string;
+  category: string;
   color: GroupColor;
+  /** Páginas que tiene el libro en total (opcional), para mostrar el avance. */
+  totalPages: number | null;
   createdAt: string;
   updatedAt: string;
   scanCount?: number;
@@ -37,12 +41,15 @@ export interface Scan {
   id: number;
   groupId: number | null;
   groupTitle?: string | null;
+  groupColor?: GroupColor | null;
   title: string;
   text: string;
   engine: ScanEngine;
   language: string;
   position: number;
   wordCount: number;
+  /** Número de página impreso detectado en la hoja («23», «xii»…); vacío si no se detectó. */
+  pageLabel: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,7 +60,11 @@ export interface SearchResult {
   groupId: number | null;
   groupTitle: string | null;
   groupColor: GroupColor | null;
+  groupAuthor: string | null;
+  groupCategory: string | null;
   position: number;
+  pageLabel: string;
+  wordCount: number;
   createdAt: string;
   snippet: string;
 }
@@ -85,3 +96,6 @@ export interface OnlineAnalysisContent {
   calidadOcr: string;
   truncated?: boolean;
 }
+
+/** Datos editables de un grupo (libro). */
+export type GroupInput = Pick<Group, 'title' | 'description' | 'author' | 'category' | 'color' | 'totalPages'>;

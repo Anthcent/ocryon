@@ -239,7 +239,7 @@ export function PageHeader({ title, subtitle, actions }: { title: ReactNode; sub
   );
 }
 
-export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -255,7 +255,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className="pb-safe max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 sm:max-w-md sm:rounded-3xl"
+        className={clsx('pb-safe max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 sm:rounded-3xl', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}
       >
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 className="text-xl font-black">{title}</h2>

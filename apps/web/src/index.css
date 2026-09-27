@@ -54,5 +54,5 @@
 }
 
 mark.hit {
-  @apply rounded bg-bee-light px-0.5 font-extrabold text-eel;
+  @apply rounded-md bg-bee px-1 font-extrabold text-eel;
 }

@@ -10,8 +10,11 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
 
     await page.getByRole('button', { name: 'Nuevo grupo' }).click();
     const dialog = page.getByRole('dialog', { name: 'Nuevo grupo' });
-    await dialog.getByPlaceholder('Ej. Don Quijote — Tomo I').fill('Historia de Roma');
-    await dialog.locator('textarea').fill('Apuntes del curso');
+    await dialog.getByLabel('Nombre del grupo').fill('Historia de Roma');
+    await dialog.getByLabel('Autor').fill('Tito Livio');
+    await dialog.getByRole('group', { name: 'Categoría' }).getByRole('button', { name: /Historia/ }).click();
+    await dialog.getByLabel('Páginas del libro').fill('250');
+    await dialog.getByLabel('Descripción').fill('Apuntes del curso');
     await dialog.getByRole('button', { name: 'Color purple' }).click();
     await dialog.getByRole('button', { name: 'Crear grupo' }).click();
     await expect(page.getByRole('heading', { name: 'Historia de Roma' })).toBeVisible();
@@ -19,18 +22,20 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
 
     await page.getByRole('button', { name: 'Editar grupo' }).click();
     const edit = page.getByRole('dialog', { name: 'Editar grupo' });
-    await expect(edit.getByPlaceholder('Ej. Don Quijote — Tomo I')).toHaveValue('Historia de Roma');
-    await edit.getByPlaceholder('Ej. Don Quijote — Tomo I').fill('Historia de Roma antigua');
+    await expect(edit.getByLabel('Nombre del grupo')).toHaveValue('Historia de Roma');
+    await expect(edit.getByLabel('Autor')).toHaveValue('Tito Livio');
+    await expect(edit.getByRole('group', { name: 'Categoría' }).getByRole('button', { name: /Historia/ })).toHaveAttribute('aria-pressed', 'true');
+    await edit.getByLabel('Nombre del grupo').fill('Historia de Roma antigua');
     await edit.getByRole('button', { name: 'Guardar cambios' }).click();
     await expect(page.getByRole('heading', { name: 'Historia de Roma antigua' })).toBeVisible();
     await expect(page.getByText('Apuntes del curso')).toBeVisible();
 
     await createScans(page, { newGroup: { title: 'Poesía' }, items: [{ text: 'Verde que te quiero verde', engine: 'manual' }] });
     await page.goto('/catalogo');
-    await page.getByLabel('Filtrar').fill('poesia');
+    await page.getByLabel('Filtrar', { exact: true }).fill('poesia');
     await expect(page.getByText('Poesía')).toBeVisible();
     await expect(page.getByText('Historia de Roma antigua')).toBeHidden();
-    await page.getByLabel('Filtrar').fill('');
+    await page.getByLabel('Filtrar', { exact: true }).fill('');
 
     await page.getByText('Historia de Roma antigua').click();
     await page.getByRole('button', { name: 'Borrar grupo' }).click();
@@ -165,21 +170,69 @@ test.describe('Búsqueda', () => {
     await page.goto('/buscar');
     await page.getByLabel('Buscar').fill('buendia');
     await expect(page.locator('mark.hit')).toHaveText('Buendía');
-    await expect(page.getByText('1 resultado')).toBeVisible();
+    await expect(page.getByText(/1 resultado en 1 libro/)).toBeVisible();
 
     await page.getByLabel('Buscar').fill('hari');
     await expect(page.locator('mark.hit')).toHaveText('harina');
-    await expect(page.getByText('Individual')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Escaneos sueltos' })).toBeVisible();
+
+    // Filtros: solo libros / solo sueltos.
+    await page.getByRole('button', { name: 'Libros', exact: true }).click();
+    await expect(page.getByText('Sin resultados')).toBeVisible();
+    await page.getByRole('button', { name: 'Sueltos', exact: true }).click();
+    await expect(page.locator('mark.hit')).toHaveText('harina');
+    await page.getByRole('button', { name: 'Todo', exact: true }).click();
 
     await page.getByLabel('Buscar').fill('xilófono');
     await expect(page.getByText('Sin resultados')).toBeVisible();
 
     await page.getByLabel('Buscar').fill('');
-    await expect(page.getByText('Busca en tus escaneos')).toBeVisible();
+    await expect(page.getByText('Búsquedas recientes')).toBeVisible();
+    // La búsqueda anterior queda como reciente y se puede repetir con un toque.
+    await page.getByRole('button', { name: 'buendia' }).click();
+    await expect(page.locator('mark.hit')).toHaveText('Buendía');
 
     await page.getByLabel('Buscar').fill('coronel');
     await page.locator('mark.hit').click();
     await expect(page).toHaveURL(/\/escaneo\/\d+$/);
     await expect(page.getByLabel('Texto escaneado')).toContainText('Aureliano');
+  });
+});
+
+test.describe('Modo libro', () => {
+  test('abre el libro, pasa páginas con animación y muestra el número de página impreso', async ({ page }) => {
+    await signUp(page);
+    const { groupId } = await createScans(page, {
+      newGroup: { title: 'El Principito', author: 'Antoine de Saint-Exupéry', category: 'Cuento', totalPages: 10 },
+      items: [1, 2, 3].map((n) => ({ text: `Texto de la hoja ${n}\n\n— ${n + 40} —`, engine: 'manual', pageLabel: String(n + 40) })),
+    });
+
+    // Desde el catálogo: la tarjeta tiene acceso directo al modo libro.
+    await page.goto('/catalogo');
+    await expect(page.getByText('3/10')).toBeVisible();
+    await page.getByRole('link', { name: 'Leer «El Principito» en modo libro' }).click();
+    const book = page.getByRole('dialog', { name: 'Modo libro: El Principito' });
+    await expect(book).toBeVisible();
+    await expect(book.getByRole('heading', { name: 'El Principito' })).toBeVisible(); // portada
+    await expect(book.getByText('Antoine de Saint-Exupéry').first()).toBeVisible();
+
+    await book.getByRole('button', { name: 'Siguiente' }).click();
+    await expect(book.getByTestId('flipping-leaf')).toBeVisible();
+    await expect(book.getByTestId('flipping-leaf')).toHaveCount(0);
+    await expect(book.getByText('Texto de la hoja 1')).toBeVisible();
+    // El número impreso va al pie y no se repite dentro del texto.
+    await expect(book.getByText('— 41 —')).toHaveCount(1);
+
+    await page.keyboard.press('ArrowRight');
+    await expect(book.getByText(/Texto de la hoja (2|3)/).first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(book).toBeHidden();
+    await expect(page).toHaveURL(new RegExp(`/catalogo/grupo/${groupId}$`));
+
+    // Desde la ficha del grupo.
+    await page.getByRole('button', { name: 'Abrir en modo libro' }).click();
+    await expect(page.getByRole('dialog', { name: 'Modo libro: El Principito' })).toBeVisible();
+    await page.getByRole('slider', { name: 'Ir a la página' }).fill('2');
+    await expect(page.getByText(/Texto de la hoja (2|3)/).first()).toBeVisible();
   });
 });

@@ -9,8 +9,8 @@ Sistema para **escanear libros y documentos** con la cámara del móvil o del PC
 | **Escáner** | Pasos guiados (dónde guardar y cómo escanear), cámara en ráfaga con tira de fotos numeradas, subida múltiple o arrastrando, galería numerada para quitar y reordenar, visor a pantalla completa (girar, reescanear, corregir texto). |
 | **Motores OCR** | **OCR.space** y **Gemini** (vía servidor, con la API key del usuario) y **Tesseract** (en el propio dispositivo, sin internet). |
 | **Modo de escaneo** | Automático (escanea al tomar la foto) o manual (acumula fotos y escaneas cuando quieras). Por página o todas a la vez. |
-| **Catálogo** | **Grupos** (libros/capítulos con páginas ordenadas) y **escaneos individuales**. Solo se guarda el texto, nunca la imagen. |
-| **Búsqueda** | Búsqueda de texto completo (SQLite FTS5) sin distinguir acentos ni mayúsculas, con resaltado. |
+| **Catálogo** | **Grupos** (libros con autor, categoría y páginas totales) y **escaneos individuales**. Solo se guarda el texto, nunca la imagen. **Modo libro** a doble página con animación de pasar página. Se detecta el número de página impreso en cada hoja. |
+| **Búsqueda** | Texto completo (SQLite FTS5) sin distinguir acentos ni mayúsculas, con resaltado, filtros (libros, sueltos, categoría), resultados agrupados por libro y búsquedas recientes. |
 | **Análisis** | *Rápido (offline)*: estadísticas, legibilidad Fernández Huerta, palabras clave y frases principales. *Con IA (Gemini)*: resumen, temas, ideas clave, entidades, vocabulario y preguntas de repaso. |
 | **Ajustes** | API keys cifradas (AES-256-GCM), prueba de conexión, motor/idioma predeterminado, modelo de Gemini, cambio de contraseña. |
 | **Seguridad** | Contraseñas con bcrypt, sesión JWT en cookie `httpOnly` + `SameSite=Lax`, protección CSRF por cabecera, rate limiting, CSP con Helmet, aislamiento de datos por usuario. |

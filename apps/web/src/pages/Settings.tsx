@@ -229,7 +229,7 @@ function ChangePassword() {
   };
 
   return (
-    <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+    <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <Field label="Contraseña actual">
         <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required />
       </Field>

@@ -5,7 +5,7 @@ import { HttpError, notFound } from '../lib/http-error.js';
 import { countWords } from '../lib/text.js';
 import { currentUser } from '../middleware/auth.js';
 import { languageCodes } from '../services/languages.js';
-import { GROUP_COLORS } from './groups.js';
+import { groupSchema } from './groups.js';
 
 const MAX_TEXT = 500_000;
 
@@ -14,18 +14,14 @@ const itemSchema = z.object({
   text: z.string().max(MAX_TEXT, 'El texto es demasiado largo'),
   engine: z.enum(['ocrspace', 'gemini', 'tesseract', 'manual']),
   language: z.enum(languageCodes).default('spa'),
+  /** Número de página impreso en la hoja, si se detectó (p. ej. «23» o «xii»). */
+  pageLabel: z.string().trim().max(20).default(''),
 });
 
 const createSchema = z
   .object({
     groupId: z.number().int().positive().optional(),
-    newGroup: z
-      .object({
-        title: z.string().trim().min(1, 'El grupo necesita un nombre').max(160),
-        description: z.string().trim().max(2000).default(''),
-        color: z.enum(GROUP_COLORS).default('green'),
-      })
-      .optional(),
+    newGroup: groupSchema.optional(),
     items: z.array(itemSchema).min(1, 'No hay escaneos para guardar').max(500),
   })
   .refine((d) => !(d.groupId && d.newGroup), 'Elige un grupo existente o uno nuevo, no ambos');
@@ -34,6 +30,7 @@ const updateSchema = z.object({
   title: z.string().trim().max(200).optional(),
   text: z.string().max(MAX_TEXT).optional(),
   groupId: z.number().int().positive().nullable().optional(),
+  pageLabel: z.string().trim().max(20).optional(),
 });
 
 const listSchema = z.object({
@@ -45,7 +42,7 @@ const listSchema = z.object({
 const idParam = z.coerce.number().int().positive();
 
 const SCAN_COLUMNS = `s.id, s.group_id AS groupId, s.title, s.text, s.engine, s.language, s.position,
-  s.word_count AS wordCount, s.created_at AS createdAt, s.updated_at AS updatedAt`;
+  s.word_count AS wordCount, s.page_label AS pageLabel, s.created_at AS createdAt, s.updated_at AS updatedAt`;
 
 export function scansRouter(ctx: AppContext) {
   const router = Router();
@@ -58,7 +55,7 @@ export function scansRouter(ctx: AppContext) {
   const findScan = (userId: number, id: number) => {
     const scan = ctx.db
       .prepare(
-        `SELECT ${SCAN_COLUMNS}, g.title AS groupTitle
+        `SELECT ${SCAN_COLUMNS}, g.title AS groupTitle, g.color AS groupColor
            FROM scans s LEFT JOIN groups g ON g.id = s.group_id
           WHERE s.id = ? AND s.user_id = ?`,
       )
@@ -73,7 +70,7 @@ export function scansRouter(ctx: AppContext) {
     const where = q.scope === 'individual' ? 'AND s.group_id IS NULL' : '';
     const scans = ctx.db
       .prepare(
-        `SELECT ${SCAN_COLUMNS}, g.title AS groupTitle
+        `SELECT ${SCAN_COLUMNS}, g.title AS groupTitle, g.color AS groupColor
            FROM scans s LEFT JOIN groups g ON g.id = s.group_id
           WHERE s.user_id = ? ${where}
           ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
@@ -96,8 +93,8 @@ export function scansRouter(ctx: AppContext) {
         const g = data.newGroup;
         groupId = Number(
           ctx.db
-            .prepare('INSERT INTO groups (user_id, title, description, color) VALUES (?, ?, ?, ?)')
-            .run(userId, g.title, g.description, g.color).lastInsertRowid,
+            .prepare('INSERT INTO groups (user_id, title, description, author, category, color, total_pages) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(userId, g.title, g.description, g.author, g.category, g.color, g.totalPages).lastInsertRowid,
         );
       } else if (data.groupId) {
         assertGroup(userId, data.groupId);
@@ -112,13 +109,14 @@ export function scansRouter(ctx: AppContext) {
       }
 
       const insert = ctx.db.prepare(
-        `INSERT INTO scans (user_id, group_id, position, title, text, engine, language, word_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO scans (user_id, group_id, position, title, text, engine, language, word_count, page_label)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const ids = data.items.map((item, i) => {
         const title = item.title || (groupId ? `Página ${position + i + 1}` : defaultTitle(item.text));
         return Number(
-          insert.run(userId, groupId, position + i, title, item.text, item.engine, item.language, countWords(item.text)).lastInsertRowid,
+          insert.run(userId, groupId, position + i, title, item.text, item.engine, item.language, countWords(item.text), item.pageLabel)
+            .lastInsertRowid,
         );
       });
       return { groupId, ids };
@@ -152,10 +150,10 @@ export function scansRouter(ctx: AppContext) {
 
     ctx.db
       .prepare(
-        `UPDATE scans SET title = ?, text = ?, group_id = ?, position = ?, word_count = ?, updated_at = datetime('now')
+        `UPDATE scans SET title = ?, text = ?, group_id = ?, position = ?, word_count = ?, page_label = ?, updated_at = datetime('now')
           WHERE id = ? AND user_id = ?`,
       )
-      .run(title, text, groupId, position, countWords(text), id, userId);
+      .run(title, text, groupId, position, countWords(text), data.pageLabel ?? (current.pageLabel as string), id, userId);
     res.json({ scan: findScan(userId, id) });
   });
 

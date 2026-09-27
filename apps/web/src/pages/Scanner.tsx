@@ -5,7 +5,9 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { Button, Card, ProgressBar } from '../components/ui';
 import { api } from '../lib/api';
-import type { Engine, Group, GroupColor, ScanEngine } from '../lib/types';
+import { EMPTY_GROUP } from '../components/GroupFields';
+import { detectPageLabel } from '../lib/page-number';
+import type { Engine, Group, GroupInput, ScanEngine } from '../lib/types';
 import { CameraCapture } from '../scan/CameraCapture';
 import { PageGallery } from '../scan/PageGallery';
 import { PageViewer } from '../scan/PageViewer';
@@ -34,8 +36,7 @@ export function ScannerPage() {
   const [mode, setMode] = useState<Mode>(preselected ? 'group' : 'individual');
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupId, setGroupId] = useState<string>(preselected ?? NEW_GROUP);
-  const [newTitle, setNewTitle] = useState('');
-  const [newColor, setNewColor] = useState<GroupColor>('green');
+  const [newGroup, setNewGroup] = useState<GroupInput>(EMPTY_GROUP);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -126,7 +127,7 @@ export function ScannerPage() {
   };
 
   const save = async () => {
-    if (mode === 'group' && groupId === NEW_GROUP && !newTitle.trim()) {
+    if (mode === 'group' && groupId === NEW_GROUP && !newGroup.title.trim()) {
       setOpenStep(1);
       toast('Ponle un nombre al grupo', 'error');
       return;
@@ -143,12 +144,17 @@ export function ScannerPage() {
 
     setSaving(true);
     try {
-      const items = done.map((p) => ({ text: p.text.trim(), engine: (p.engine ?? 'manual') as ScanEngine, language: session.language }));
+      const items = done.map((p) => ({
+        text: p.text.trim(),
+        engine: (p.engine ?? 'manual') as ScanEngine,
+        language: session.language,
+        pageLabel: detectPageLabel(p.text),
+      }));
       const result = await api.scans.create(
         mode === 'individual'
           ? { items }
           : groupId === NEW_GROUP
-            ? { newGroup: { title: newTitle.trim(), color: newColor }, items }
+            ? { newGroup: { ...newGroup, title: newGroup.title.trim() }, items }
             : { groupId: Number(groupId), items },
       );
       // Tras guardar el texto, las imágenes se descartan.
@@ -173,7 +179,18 @@ export function ScannerPage() {
 
   const toggle = (step: 1 | 2) => setOpenStep((s) => (s === step ? null : step));
 
-  const destination = { mode, setMode, groups, groupId, setGroupId, newTitle, setNewTitle, newColor, setNewColor };
+  // Números de página impresos detectados en el texto de las hojas ya escaneadas.
+  const pageLabels = pages.map((p) => (p.status === 'done' ? detectPageLabel(p.text) : '')).filter(Boolean);
+  const destination = {
+    mode,
+    setMode,
+    groups,
+    groupId,
+    setGroupId,
+    newGroup,
+    setNewGroup,
+    sheets: { count: pages.length, labels: pageLabels },
+  };
   const engineOptions = {
     engine: session.engine,
     setEngine: session.setEngine,

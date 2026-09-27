@@ -1,10 +1,12 @@
 import clsx from 'clsx';
-import { BookOpen, Check, ChevronDown, Cpu, FileText, KeyRound, Plus, Sparkles, Zap } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, Cpu, FileText, Files, KeyRound, Plus, Sparkles, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { Input, Toggle } from '../components/ui';
-import { ENGINES, GROUP_COLORS, GROUP_STYLES, LANGUAGES } from '../lib/constants';
-import type { Engine, Group, GroupColor } from '../lib/types';
+import { LessonProgress } from '../components/ActionTile';
+import { GroupFields } from '../components/GroupFields';
+import { Toggle } from '../components/ui';
+import { ENGINES, GROUP_STYLES, LANGUAGES } from '../lib/constants';
+import type { Engine, Group, GroupInput } from '../lib/types';
 
 export type Mode = 'individual' | 'group';
 export const NEW_GROUP = 'new';
@@ -140,25 +142,29 @@ export interface DestinationProps {
   groups: Group[];
   groupId: string;
   setGroupId: (id: string) => void;
-  newTitle: string;
-  setNewTitle: (t: string) => void;
-  newColor: GroupColor;
-  setNewColor: (c: GroupColor) => void;
+  newGroup: GroupInput;
+  setNewGroup: (g: GroupInput) => void;
+  /** Hojas en el escáner y números de página impresos detectados en su texto. */
+  sheets: { count: number; labels: string[] };
 }
 
-export function destinationSummary({ mode, groups, groupId, newTitle }: DestinationProps) {
+export function destinationSummary({ mode, groups, groupId, newGroup }: DestinationProps) {
   if (mode === 'individual') return 'Páginas sueltas';
-  if (groupId === NEW_GROUP) return newTitle ? `Grupo nuevo: ${newTitle}` : 'Grupo nuevo';
+  if (groupId === NEW_GROUP) return newGroup.title ? `Grupo nuevo: ${newGroup.title}` : 'Grupo nuevo';
   return `Grupo: ${groups.find((g) => String(g.id) === groupId)?.title ?? ''}`;
 }
 
 export function DestinationPanel(props: DestinationProps) {
-  const { mode, groups, groupId } = props;
+  const { mode, groups, groupId, sheets } = props;
   const selectedGroup = groups.find((g) => String(g.id) === groupId);
+  const isNew = groupId === NEW_GROUP;
+  const saved = isNew ? 0 : (selectedGroup?.scanCount ?? 0);
+  const totalPages = isNew ? props.newGroup.totalPages : (selectedGroup?.totalPages ?? null);
+  const afterSave = saved + sheets.count;
 
   return (
     <StepPanel>
-      <div className="grid gap-2 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         <ChoiceCard
           selected={mode === 'individual'}
           onSelect={() => props.setMode('individual')}
@@ -178,41 +184,25 @@ export function DestinationPanel(props: DestinationProps) {
       </div>
 
       {mode === 'group' && (
-        <div className="space-y-3 rounded-2xl bg-polar p-3">
-          <div className="text-sm font-extrabold">Elige el grupo</div>
-          <div className="-mx-1 flex flex-wrap gap-2 px-1" role="group" aria-label="Grupo">
-            <Chip selected={groupId === NEW_GROUP} onClick={() => props.setGroupId(NEW_GROUP)}>
-              <Plus className="size-4" /> Nuevo
-            </Chip>
-            {groups.map((g) => (
-              <Chip key={g.id} selected={groupId === String(g.id)} onClick={() => props.setGroupId(String(g.id))}>
-                <span className={clsx('size-3 rounded-full', GROUP_STYLES[g.color].bg)} />
-                <span className="max-w-48 truncate">{g.title}</span>
+        <div className="space-y-4 rounded-2xl bg-polar p-3 sm:p-4">
+          <div>
+            <div className="mb-2 text-sm font-extrabold">Elige el grupo</div>
+            <div className="-mx-1 flex flex-wrap gap-2 px-1" role="group" aria-label="Grupo">
+              <Chip selected={isNew} onClick={() => props.setGroupId(NEW_GROUP)}>
+                <Plus className="size-4" /> Nuevo
               </Chip>
-            ))}
+              {groups.map((g) => (
+                <Chip key={g.id} selected={groupId === String(g.id)} onClick={() => props.setGroupId(String(g.id))}>
+                  <span className={clsx('size-3 rounded-full', GROUP_STYLES[g.color].bg)} />
+                  <span className="max-w-48 truncate">{g.title}</span>
+                </Chip>
+              ))}
+            </div>
           </div>
-          {groupId === NEW_GROUP ? (
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <Input
-                value={props.newTitle}
-                onChange={(e) => props.setNewTitle(e.target.value)}
-                placeholder="Ej. Cien años de soledad"
-                maxLength={160}
-                aria-label="Nombre del grupo nuevo"
-                className="md:flex-1"
-              />
-              <div className="flex flex-wrap gap-2">
-                {GROUP_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-label={`Color ${c}`}
-                    aria-pressed={props.newColor === c}
-                    onClick={() => props.setNewColor(c)}
-                    className={clsx('size-9 rounded-full', GROUP_STYLES[c].bg, props.newColor === c && 'ring-4 ring-macaw/40 ring-offset-2')}
-                  />
-                ))}
-              </div>
+
+          {isNew ? (
+            <div className="rounded-2xl bg-white p-3 sm:p-4">
+              <GroupFields value={props.newGroup} onChange={props.setNewGroup} />
             </div>
           ) : (
             selectedGroup && (
@@ -221,10 +211,46 @@ export function DestinationPanel(props: DestinationProps) {
               </p>
             )
           )}
+
+          {/* Hojas detectadas en el escáner y avance del libro */}
+          <div className="flex items-start gap-3 rounded-2xl border-2 border-feather/40 bg-white p-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-feather-light text-feather-dark">
+              <Files className="size-6" />
+            </span>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="font-extrabold" data-testid="sheet-count">
+                {sheets.count === 0 ? 'Aún no hay hojas' : `${sheets.count} ${sheets.count === 1 ? 'hoja detectada' : 'hojas detectadas'}`}
+              </div>
+              {sheets.labels.length > 0 && (
+                <div className="text-sm text-wolf">
+                  Números de página detectados: <span className="font-extrabold text-eel">{pageRange(sheets.labels)}</span>
+                </div>
+              )}
+              {totalPages ? (
+                <LessonProgress value={(afterSave / totalPages) * 100} label={`${afterSave} de ${totalPages} páginas`} />
+              ) : (
+                sheets.count > 0 && !isNew && <div className="text-sm text-wolf">Al guardar el grupo tendrá {afterSave} páginas.</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </StepPanel>
   );
+}
+
+/** «3, 4, 5, 9» → «3–5, 9» (solo números arábigos; los romanos se muestran tal cual). */
+function pageRange(labels: string[]) {
+  const numbers = labels.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  if (numbers.length !== labels.length) return labels.join(', ');
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const start = sorted[i];
+    while (sorted[i + 1] === sorted[i] + 1) i++;
+    parts.push(start === sorted[i] ? String(start) : `${start}–${sorted[i]}`);
+  }
+  return parts.join(', ');
 }
 
 const ENGINE_ICON: Record<Engine, { icon: ReactNode; className: string }> = {
@@ -252,7 +278,7 @@ export function engineSummary({ engine, language, autoScan, keysReady }: EngineP
 export function EnginePanel(props: EngineProps) {
   return (
     <StepPanel>
-      <div className="grid gap-2 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
         {(Object.keys(ENGINES) as Engine[]).map((e) => (
           <ChoiceCard
             key={e}
@@ -286,7 +312,7 @@ export function EnginePanel(props: EngineProps) {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-end">
         <div>
           <div className="mb-2 text-sm font-extrabold">Idioma del texto</div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Idioma del texto">

@@ -1,14 +1,15 @@
 import clsx from 'clsx';
 import { ArrowLeft, BookOpen, BookOpenText, BrainCircuit, ChevronLeft, ChevronRight, Clock, Copy, Download, FileText, LayoutGrid, Pencil, Plus, Trash2, Type } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { ActionTile } from '../components/ActionTile';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { ActionTile, LessonProgress } from '../components/ActionTile';
+import { BookViewer } from '../components/BookViewer';
 import { AnalysisPanel } from '../components/AnalysisPanel';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { Reader } from '../components/Reader';
 import { Button, EmptyState, PageLoader, Segmented } from '../components/ui';
 import { api } from '../lib/api';
-import { GROUP_STYLES } from '../lib/constants';
+import { categoryEmoji, GROUP_STYLES } from '../lib/constants';
 import { copyText, downloadText, formatDate, formatNumber } from '../lib/format';
 import type { Group, Scan } from '../lib/types';
 import { GroupFormModal } from './Catalog';
@@ -24,6 +25,10 @@ export function GroupDetailPage() {
   const [tab, setTab] = useState<Tab>('paginas');
   const [editing, setEditing] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  // «?libro=1» abre directamente el modo libro (desde el catálogo).
+  const [params, setParams] = useSearchParams();
+  const bookOpen = params.get('libro') === '1';
+  const setBookOpen = (open: boolean) => setParams(open ? { libro: '1' } : {}, { replace: true });
 
   useEffect(() => {
     api.groups
@@ -112,7 +117,13 @@ export function GroupDetailPage() {
             <BookOpen className="size-12" strokeWidth={2} />
           </div>
           <div className="min-w-0 flex-1">
+            {group.category && (
+              <span className="mb-2 inline-block rounded-lg bg-white/25 px-2 py-0.5 text-xs font-extrabold">
+                {categoryEmoji(group.category)} {group.category}
+              </span>
+            )}
             <h1 className="text-2xl font-black leading-tight sm:text-3xl">{group.title}</h1>
+            {group.author && <p className="text-lg font-bold text-white/90">{group.author}</p>}
             {group.description && <p className="mt-1 line-clamp-2 text-white/90">{group.description}</p>}
             <div className="mt-3 flex flex-wrap gap-2 text-sm font-extrabold">
               <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/20 px-2.5 py-1">
@@ -125,9 +136,28 @@ export function GroupDetailPage() {
                 <Clock className="size-4" /> {minutes} min de lectura
               </span>
             </div>
+            {group.totalPages && (
+              <div className="mt-3 max-w-md rounded-2xl bg-white/20 p-2.5 [&_.bg-swan]:bg-white/30 [&_span]:text-white">
+                <LessonProgress
+                  value={(scans.length / group.totalPages) * 100}
+                  label={`${scans.length} de ${group.totalPages} páginas escaneadas`}
+                />
+              </div>
+            )}
             <p className="mt-2 text-xs font-bold text-white/80">Creado el {formatDate(group.createdAt)}</p>
           </div>
         </div>
+        {scans.length > 0 && (
+          <div className="px-5 pb-5 sm:px-6">
+            <button
+              type="button"
+              onClick={() => setBookOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-b-[5px] border-white/70 bg-white px-5 py-3.5 text-base font-extrabold uppercase tracking-wide text-eel transition hover:bg-polar active:translate-y-[2px] active:border-b-2 sm:w-auto"
+            >
+              <BookOpenText className={clsx('size-6', style.text)} /> Abrir en modo libro
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Acciones principales, siempre a la vista */}
@@ -167,7 +197,10 @@ export function GroupDetailPage() {
                 <Link to={`/escaneo/${s.id}`} className="group flex flex-1 flex-col p-3 hover:bg-polar">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className={clsx('flex size-9 shrink-0 items-center justify-center rounded-xl text-base font-black', style.soft, style.text)}>{i + 1}</span>
-                    <span className="text-xs font-bold text-hare">{formatNumber(s.wordCount)} pal.</span>
+                    <span className="text-xs font-bold text-hare">
+                      {s.pageLabel ? <span className="mr-1 rounded-md bg-feather-light px-1.5 py-0.5 text-feather-dark">pág. {s.pageLabel}</span> : null}
+                      {formatNumber(s.wordCount)} pal.
+                    </span>
                   </div>
                   <div className="truncate text-sm font-extrabold group-hover:text-macaw">{s.title}</div>
                   {/* Vista previa como una mini página */}
@@ -217,6 +250,8 @@ export function GroupDetailPage() {
       {tab === 'leer' && <Reader pages={scans} />}
 
       {tab === 'analisis' && <AnalysisPanel targetType="group" targetId={group.id} text={fullText} />}
+
+      {bookOpen && scans.length > 0 && <BookViewer group={group} pages={scans} onClose={() => setBookOpen(false)} />}
 
       <GroupFormModal open={editing} onClose={() => setEditing(false)} group={group} onSaved={setGroup} />
     </div>

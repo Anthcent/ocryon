@@ -42,6 +42,7 @@ test.describe('Escáner', () => {
     // Escanear solo la primera página.
     await cards(page).nth(0).getByRole('button', { name: 'Escanear', exact: true }).click();
     await expect(cards(page).nth(0).getByText('Listo')).toBeVisible();
+    await expect(cards(page).nth(0).getByText(/^pág\. \d+$/)).toBeVisible();
     await expect(page.getByText('1 de 3 escaneadas')).toBeVisible();
     await expect(cards(page).nth(1).getByText('Sin escanear')).toBeVisible();
 
@@ -131,12 +132,19 @@ test.describe('Escáner', () => {
 
     await openStep(page, '¿Dónde se guarda?');
     await page.getByRole('button', { name: /^Libro o grupo/ }).click();
-    await page.getByLabel('Nombre del grupo nuevo').fill('El Quijote');
+    await page.getByLabel('Nombre del grupo').fill('El Quijote');
+    await page.getByLabel('Autor').fill('Miguel de Cervantes');
+    await page.getByRole('group', { name: 'Categoría' }).getByRole('button', { name: /Novela/ }).click();
+    await page.getByLabel('Páginas del libro').fill('100');
     await page.getByRole('button', { name: 'Color blue' }).click();
+    await expect(page.getByTestId('sheet-count')).toHaveText('2 hojas detectadas');
+    await expect(page.getByText('2 de 100 páginas')).toBeVisible();
     await page.getByRole('button', { name: 'Guardar (2)' }).click();
 
     await expect(page).toHaveURL(/\/catalogo\/grupo\/\d+$/);
     await expect(page.getByRole('heading', { name: 'El Quijote' })).toBeVisible();
+    await expect(page.getByText('Miguel de Cervantes')).toBeVisible();
+    await expect(page.getByText('2 de 100 páginas escaneadas')).toBeVisible();
     await expect(page.getByText('Página 1')).toBeVisible();
     await expect(page.getByText('Página 2')).toBeVisible();
   });
@@ -153,7 +161,7 @@ test.describe('Escáner', () => {
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Guardar (1)' }).click();
     await expectToast(page, 'Ponle un nombre al grupo');
-    await expect(page.getByLabel('Nombre del grupo nuevo')).toBeVisible();
+    await expect(page.getByLabel('Nombre del grupo')).toBeVisible();
   });
 
   test('añadir páginas a un grupo existente desde su ficha', async ({ page }) => {

@@ -173,7 +173,7 @@ export function ScanDetailPage() {
       {/* Acciones en fila (móvil y tablet) */}
       <div className="grid grid-cols-5 gap-2 lg:hidden">{actions(true)}</div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
         <div className="space-y-4">
           <Segmented<Tab>
             value={tab}

@@ -2,7 +2,7 @@ import type {
   Analysis,
   Engine,
   Group,
-  GroupColor,
+  GroupInput,
   Scan,
   ScanEngine,
   SearchResult,
@@ -105,9 +105,9 @@ export const api = {
   groups: {
     list: () => request<{ groups: Group[] }>('/groups'),
     get: (id: number) => request<{ group: Group; scans: Scan[] }>(`/groups/${id}`),
-    create: (data: { title: string; description?: string; color?: GroupColor }) =>
-      request<{ group: Group }>('/groups', { method: 'POST', json: data }),
-    update: (id: number, data: Partial<Pick<Group, 'title' | 'description' | 'color'>>) =>
+    categories: () => request<{ categories: { category: string; count: number }[] }>('/groups/categories'),
+    create: (data: Partial<GroupInput> & { title: string }) => request<{ group: Group }>('/groups', { method: 'POST', json: data }),
+    update: (id: number, data: Partial<GroupInput>) =>
       request<{ group: Group }>(`/groups/${id}`, { method: 'PATCH', json: data }),
     reorder: (id: number, scanIds: number[]) => request<void>(`/groups/${id}/order`, { method: 'PUT', json: { scanIds } }),
     remove: (id: number) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
@@ -118,14 +118,15 @@ export const api = {
     get: (id: number) => request<{ scan: Scan }>(`/scans/${id}`),
     create: (data: {
       groupId?: number;
-      newGroup?: { title: string; description?: string; color?: GroupColor };
-      items: { title?: string; text: string; engine: ScanEngine; language: string }[];
+      newGroup?: Partial<GroupInput> & { title: string };
+      items: { title?: string; text: string; engine: ScanEngine; language: string; pageLabel?: string }[];
     }) => request<{ groupId: number | null; ids: number[] }>('/scans', { method: 'POST', json: data }),
     update: (id: number, data: { title?: string; text?: string; groupId?: number | null }) =>
       request<{ scan: Scan }>(`/scans/${id}`, { method: 'PATCH', json: data }),
     remove: (id: number) => request<void>(`/scans/${id}`, { method: 'DELETE' }),
   },
-  search: (q: string, groupId?: number) => request<{ results: SearchResult[] }>(`/search${qs({ q, groupId })}`),
+  search: (q: string, filters: { groupId?: number; type?: 'all' | 'group' | 'individual'; category?: string } = {}) =>
+    request<{ results: SearchResult[]; total: number }>(`/search${qs({ q, ...filters })}`),
   stats: () => request<Stats>(`/stats${qs({ tz: -new Date().getTimezoneOffset() })}`),
   analyses: {
     list: (targetType: 'group' | 'scan', targetId: number) =>

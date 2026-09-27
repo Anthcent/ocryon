@@ -130,7 +130,7 @@ export function HomePage() {
               Ver todo
             </Link>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {stats.recentGroups.map((g) => (
               <Link key={g.id} to={`/catalogo/grupo/${g.id}`}>
                 <Card interactive className="flex items-center gap-4 p-4">

@@ -33,3 +33,19 @@ export const GROUP_STYLES: Record<GroupColor, { bg: string; soft: string; text: 
 };
 
 export const GROUP_COLORS = Object.keys(GROUP_STYLES) as GroupColor[];
+
+/** Categorías sugeridas para los grupos; el usuario puede escribir otras. */
+export const CATEGORY_PRESETS: { name: string; emoji: string }[] = [
+  { name: 'Novela', emoji: '📖' },
+  { name: 'Cuento', emoji: '🧚' },
+  { name: 'Poesía', emoji: '🪶' },
+  { name: 'Ensayo', emoji: '💭' },
+  { name: 'Historia', emoji: '🏛️' },
+  { name: 'Ciencia', emoji: '🔬' },
+  { name: 'Texto escolar', emoji: '🎒' },
+  { name: 'Apuntes', emoji: '📝' },
+  { name: 'Documento', emoji: '📄' },
+  { name: 'Receta', emoji: '🍳' },
+];
+
+export const categoryEmoji = (name: string) => CATEGORY_PRESETS.find((c) => c.name === name)?.emoji ?? '🏷️';

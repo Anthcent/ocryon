@@ -47,7 +47,7 @@ http
       return send(res, 200, {
         IsErroredOnProcessing: false,
         OCRExitCode: 1,
-        ParsedResults: [{ ParsedText: `Texto de OCR.space número ${counter}: en un lugar de la Mancha vivía un hidalgo.\r\n` }],
+        ParsedResults: [{ ParsedText: `Texto de OCR.space número ${counter}: en un lugar de la Mancha vivía un hidalgo.\r\n\r\n— ${counter + 10} —\r\n` }],
       });
     }
 

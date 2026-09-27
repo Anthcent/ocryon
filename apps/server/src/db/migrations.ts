@@ -77,4 +77,12 @@ export const migrations: string[] = [
   );
   CREATE INDEX idx_analyses_target ON analyses(user_id, target_type, target_id, created_at DESC);
   `,
+  /* sql */ `
+  -- v2: más datos de los grupos (libros) y número de página impreso detectado en cada hoja.
+  ALTER TABLE groups ADD COLUMN author TEXT NOT NULL DEFAULT '';
+  ALTER TABLE groups ADD COLUMN category TEXT NOT NULL DEFAULT '';
+  ALTER TABLE groups ADD COLUMN total_pages INTEGER;
+  ALTER TABLE scans ADD COLUMN page_label TEXT NOT NULL DEFAULT '';
+  CREATE INDEX idx_groups_category ON groups(user_id, category);
+  `,
 ];

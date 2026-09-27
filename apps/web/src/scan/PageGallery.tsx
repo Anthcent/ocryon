@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { ChevronLeft, ChevronRight, CircleAlert, ImagePlus, X } from 'lucide-react';
+import { detectPageLabel } from '../lib/page-number';
 import type { PendingPage } from '../lib/pages-store';
 import { ScanProgressBar } from './ScanProgressBar';
 import type { ScanProgress } from './ScanSession';
@@ -67,6 +68,8 @@ function PageThumb({
   const url = useObjectUrl(page.image);
   const status = STATUS[page.status];
   const n = index + 1;
+  // Número de página impreso en la hoja, si el OCR lo reconoció.
+  const pageLabel = page.status === 'done' ? detectPageLabel(page.text) : '';
 
   return (
     <div
@@ -106,6 +109,9 @@ function PageThumb({
 
       <div className="flex flex-1 flex-col gap-1.5 p-2">
         {page.status === 'done' && page.text && <p className="line-clamp-2 px-1 text-xs text-wolf">{page.text}</p>}
+        {pageLabel && (
+          <span className="self-start rounded-lg bg-feather-light px-2 py-0.5 text-[11px] font-extrabold text-feather-dark">pág. {pageLabel}</span>
+        )}
         {page.error && (
           <p className="flex gap-1 px-1 text-xs font-bold text-cardinal">
             <CircleAlert className="size-4 shrink-0" />

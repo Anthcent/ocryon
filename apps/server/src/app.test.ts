@@ -1,7 +1,12 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
+import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { openDatabase } from './db/index.js';
+import { migrations } from './db/migrations.js';
 import { createCipher } from './lib/crypto.js';
 import { computeStreak } from './routes/stats.js';
 import { toFtsQuery } from './routes/search.js';
@@ -146,6 +151,49 @@ describe('escaneos, grupos y búsqueda', () => {
     expect(list.body.analyses[0].content).toEqual({ palabras: 5 });
     await agent.delete(`/api/scans/${id}`).set('X-Requested-With', 'ocryon').expect(204);
     expect(db.prepare('SELECT COUNT(*) AS n FROM analyses').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('grupos con más datos y búsqueda filtrada', () => {
+  it('guarda autor, categoría, total de páginas y número de página detectado', async () => {
+    const { agent, post } = await registered();
+    const saved = await post('/api/scans', {
+      newGroup: { title: 'Rayuela', author: 'Julio Cortázar', category: 'Novela', totalPages: 600, color: 'blue' },
+      items: [{ text: 'Encontraría a la Maga', engine: 'manual', pageLabel: '15' }],
+    }).expect(201);
+    const { body } = await agent.get(`/api/groups/${saved.body.groupId}`).expect(200);
+    expect(body.group).toMatchObject({ author: 'Julio Cortázar', category: 'Novela', totalPages: 600 });
+    expect(body.scans[0].pageLabel).toBe('15');
+    const cats = await agent.get('/api/groups/categories').expect(200);
+    expect(cats.body.categories).toEqual([{ category: 'Novela', count: 1 }]);
+  });
+
+  it('filtra la búsqueda por tipo y categoría', async () => {
+    const { agent, post } = await registered();
+    await post('/api/scans', { newGroup: { title: 'Libro A', category: 'Historia' }, items: [{ text: 'la batalla de Ayacucho', engine: 'manual' }] });
+    await post('/api/scans', { newGroup: { title: 'Libro B', category: 'Novela' }, items: [{ text: 'otra batalla imaginaria', engine: 'manual' }] });
+    await post('/api/scans', { items: [{ text: 'apunte sobre una batalla', engine: 'manual' }] });
+    const all = await agent.get('/api/search').query({ q: 'batalla' });
+    expect(all.body.total).toBe(3);
+    expect((await agent.get('/api/search').query({ q: 'batalla', type: 'individual' })).body.total).toBe(1);
+    expect((await agent.get('/api/search').query({ q: 'batalla', type: 'group' })).body.total).toBe(2);
+    const hist = await agent.get('/api/search').query({ q: 'batalla', category: 'Historia' });
+    expect(hist.body.results.map((r: any) => r.groupTitle)).toEqual(['Libro A']);
+  });
+
+  it('migra una base de datos de la versión 1 sin perder datos', () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ocryon-')), 'v1.db');
+    const old = new DatabaseSync(file);
+    old.exec(migrations[0]);
+    old.exec('PRAGMA user_version = 1');
+    old.exec(`INSERT INTO users (email, name, password_hash) VALUES ('a@b.co', 'A', 'x')`);
+    old.exec(`INSERT INTO groups (user_id, title) VALUES (1, 'Viejo')`);
+    old.close();
+    const db = openDatabase(file);
+    expect(db.prepare('SELECT title, author, category, total_pages AS totalPages FROM groups').get()).toEqual({
+      title: 'Viejo', author: '', category: '', totalPages: null,
+    });
+    db.close();
   });
 });
 
