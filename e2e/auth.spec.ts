@@ -56,8 +56,15 @@ test.describe('Autenticación', () => {
     if (isMobile(page)) {
       await expect(sidebar).toBeHidden();
       await expect(bottomNav).toBeVisible();
+      await bottomNav.getByRole('link', { name: 'Documentos' }).click();
+      await expect(page.getByRole('heading', { name: 'Tus documentos' })).toBeVisible();
+      // Ajustes pasa a la barra superior en móvil.
+      await page.getByRole('banner').getByRole('link', { name: 'Ajustes' }).click();
+      await expect(page).toHaveURL(/\/ajustes$/);
       await bottomNav.getByRole('link', { name: 'Catálogo' }).click();
     } else {
+      await sidebar.getByRole('link', { name: 'Documentos' }).click();
+      await expect(page.getByRole('heading', { name: 'Tus documentos' })).toBeVisible();
       await expect(sidebar).toBeVisible();
       await expect(bottomNav).toBeHidden();
       await sidebar.getByRole('link', { name: 'Catálogo' }).click();

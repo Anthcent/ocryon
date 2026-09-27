@@ -196,6 +196,69 @@ describe('grupos con más datos y búsqueda filtrada', () => {
   });
 });
 
+describe('documentos', () => {
+  const invoice = {
+    templateKey: 'factura',
+    templateName: 'Factura',
+    title: 'Factura F001-123',
+    fields: [
+      { key: 'numero', label: 'Número', type: 'id', value: 'F001-123' },
+      { key: 'total', label: 'Total', type: 'money', value: '118.00' },
+    ],
+    text: 'FACTURA F001-123 TOTAL S/ 118.00',
+    engine: 'tesseract',
+    method: 'rules',
+  };
+
+  it('guarda, busca, filtra, edita y borra documentos', async () => {
+    const { agent, post } = await registered();
+    const created = await post('/api/documents', invoice).expect(201);
+    const id = created.body.document.id;
+    expect(created.body.document.fields[1]).toMatchObject({ key: 'total', value: '118.00' });
+    await post('/api/documents', { ...invoice, templateKey: 'recibo', templateName: 'Recibo', title: 'Recibo luz' }).expect(201);
+
+    const all = await agent.get('/api/documents').expect(200);
+    expect(all.body.documents).toHaveLength(2);
+    expect(all.body.counts).toEqual(expect.arrayContaining([{ templateKey: 'factura', count: 1 }]));
+    expect((await agent.get('/api/documents').query({ template: 'recibo' })).body.documents).toHaveLength(1);
+    expect((await agent.get('/api/documents').query({ q: 'F001' })).body.documents).toHaveLength(2);
+    expect((await agent.get('/api/documents').query({ q: 'luz' })).body.documents).toHaveLength(1);
+
+    const fields = [...invoice.fields];
+    fields[1] = { ...fields[1], value: '120.00' };
+    const patched = await agent.patch(`/api/documents/${id}`).set('X-Requested-With', 'ocryon').send({ fields }).expect(200);
+    expect(patched.body.document.fields[1].value).toBe('120.00');
+    await agent.delete(`/api/documents/${id}`).set('X-Requested-With', 'ocryon').expect(204);
+    await agent.get(`/api/documents/${id}`).expect(404);
+  });
+
+  it('crea tipos de documento propios y rechaza campos repetidos', async () => {
+    const { agent, post } = await registered();
+    const tpl = { name: 'Orden de compra', emoji: '🧾', fields: [{ key: 'proveedor', label: 'Proveedor', type: 'text' }] };
+    const res = await post('/api/documents/templates', tpl).expect(201);
+    expect(res.body.template.fields).toEqual(tpl.fields);
+    await post('/api/documents/templates', { ...tpl, fields: [tpl.fields[0], tpl.fields[0]] }).expect(400);
+    expect((await agent.get('/api/documents/templates')).body.templates).toHaveLength(1);
+  });
+
+  it('la extracción con IA pide la API key de Gemini', async () => {
+    const { post } = await registered();
+    const res = await post('/api/documents/extract', { fields: [{ key: 'total', label: 'Total', type: 'money' }], text: 'TOTAL 10' }).expect(412);
+    expect(res.body.code).toBe('missing_api_key');
+  });
+
+  it('aísla los documentos entre usuarios', async () => {
+    const a = await registered('doc-a@example.com');
+    const created = await a.post('/api/documents', invoice);
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const { body } = created;
+    const b = request.agent(a.app);
+    await b.post('/api/auth/register').set('X-Requested-With', 'ocryon').send({ name: 'Beto', email: 'doc-b@example.com', password: 'secreto123' }).expect(201);
+    await b.get(`/api/documents/${body.document.id}`).expect(404);
+    expect((await b.get('/api/documents')).body.documents).toHaveLength(0);
+  });
+});
+
 describe('utilidades', () => {
   it('construye consultas FTS seguras', () => {
     expect(toFtsQuery('hola "mundo" OR x*')).toBe('"hola" "mundo" "OR" "x"*');

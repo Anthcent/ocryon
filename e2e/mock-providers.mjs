@@ -21,6 +21,19 @@ const ANALYSIS = {
   calidadOcr: 'Buena, sin errores evidentes.',
 };
 
+/** Con una API key de OCR.space que empieza por «doc-factura» se devuelve el texto de una factura. */
+const INVOICE = [
+  'Librería El Quijote S.A.C.',
+  'RUC: 20512345678',
+  'FACTURA ELECTRÓNICA',
+  'F001-000123',
+  'Fecha de emisión: 15/03/2025',
+  'Cliente: María Pérez',
+  'Subtotal: S/ 1,000.00',
+  'IGV 18%: S/ 180.00',
+  'Importe total: S/ 1,180.00',
+].join('\r\n');
+
 let counter = 0;
 
 function readBody(req) {
@@ -44,6 +57,9 @@ http
       if (req.headers.apikey === INVALID) return send(res, 403, 'The API key is invalid');
       await wait();
       counter++;
+      if (String(req.headers.apikey).startsWith('doc-factura')) {
+        return send(res, 200, { IsErroredOnProcessing: false, OCRExitCode: 1, ParsedResults: [{ ParsedText: INVOICE }] });
+      }
       return send(res, 200, {
         IsErroredOnProcessing: false,
         OCRExitCode: 1,
@@ -61,7 +77,11 @@ http
       await wait();
       const parts = payload.contents?.[0]?.parts ?? [];
       let text = 'ok';
-      if (payload.generationConfig?.responseSchema) text = JSON.stringify(ANALYSIS);
+      const schema = payload.generationConfig?.responseSchema;
+      if (schema && !schema.properties?.resumen) {
+        // Extracción de datos de un documento: un valor reconocible por campo.
+        text = JSON.stringify(Object.fromEntries(Object.entries(schema.properties).map(([key, p]) => [key, `IA ${p.description ?? key}`])));
+      } else if (schema) text = JSON.stringify(ANALYSIS);
       else if (parts.some((p) => p.inline_data)) {
         counter++;
         text = `Texto de Gemini número ${counter}: el caballero de la triste figura.`;

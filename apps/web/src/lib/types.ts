@@ -98,3 +98,32 @@ export interface OnlineAnalysisContent {
 
 /** Datos editables de un grupo (libro). */
 export type GroupInput = Pick<Group, 'title' | 'description' | 'author' | 'category' | 'color' | 'totalPages'>;
+
+export interface DocField {
+  key: string;
+  label: string;
+  type: import('./doc-templates').FieldType;
+  value: string;
+}
+
+export interface SavedDocument {
+  id: number;
+  templateKey: string;
+  templateName: string;
+  title: string;
+  fields: DocField[];
+  text: string;
+  engine: ScanEngine;
+  /** Cómo se extrajeron los datos: con IA, con reglas en el dispositivo o a mano. */
+  method: 'ai' | 'rules' | 'manual';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomTemplate {
+  id: number;
+  name: string;
+  emoji: string;
+  fields: { key: string; label: string; type: import('./doc-templates').FieldType }[];
+  createdAt: string;
+}

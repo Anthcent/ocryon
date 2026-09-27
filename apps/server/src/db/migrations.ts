@@ -85,4 +85,31 @@ export const migrations: string[] = [
   ALTER TABLE scans ADD COLUMN page_label TEXT NOT NULL DEFAULT '';
   CREATE INDEX idx_groups_category ON groups(user_id, category);
   `,
+  /* sql */ `
+  -- v3: módulo de documentos. Los tipos predefinidos viven en el cliente; aquí solo los propios.
+  CREATE TABLE doc_templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    emoji       TEXT NOT NULL DEFAULT '📄',
+    fields      TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_doc_templates_user ON doc_templates(user_id);
+
+  CREATE TABLE documents (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    template_key  TEXT NOT NULL,
+    template_name TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    fields        TEXT NOT NULL,
+    text          TEXT NOT NULL DEFAULT '',
+    engine        TEXT NOT NULL DEFAULT 'manual',
+    method        TEXT NOT NULL DEFAULT 'manual',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_documents_user ON documents(user_id, template_key, created_at DESC);
+  `,
 ];

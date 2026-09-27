@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { BAD_IMAGE, expectToast, pageImage, signUp, updateSettings } from './helpers';
+import { BAD_IMAGE, createScans, expectToast, pageImage, signUp, updateSettings } from './helpers';
 
 const cards = (page: Page) => page.getByTestId('page-card');
 const upload = (page: Page, files: string[]) => page.locator('input[type=file][multiple]').setInputFiles(files);
@@ -188,6 +188,69 @@ test.describe('Escáner', () => {
     await expect(page).toHaveURL(new RegExp(`/catalogo/grupo/${groupId}$`));
     await expect(page.locator('a[href^="/escaneo/"]')).toHaveCount(2);
     await expect(page.getByRole('link', { name: /Página 2/ })).toBeVisible();
+  });
+
+  test('buscar el grupo entre muchos: por autor, categoría o una frase del texto', async ({ page }) => {
+    await signUp(page);
+    const books = [
+      { title: 'Cien años de soledad', author: 'Gabriel García Márquez', category: 'Novela', text: 'Muchos años después, frente al pelotón de fusilamiento.' },
+      { title: 'Apuntes de química', author: '', category: 'Estudio', text: 'La tabla periódica ordena los elementos.' },
+      { title: 'Recetario de la abuela', author: '', category: '', description: 'Postres de Navidad', text: 'Mezclar la harina con los huevos.' },
+      { title: 'Libro sin nombre claro', author: '', category: '', text: 'Y vio treinta o cuarenta molinos de viento que había en aquel campo.' },
+      { title: 'Historia antigua', author: 'Tito Livio', category: 'Historia', text: 'La fundación de Roma.' },
+      { title: 'Poemas', author: 'Pablo Neruda', category: 'Poesía', text: 'Puedo escribir los versos más tristes esta noche.' },
+    ];
+    for (const b of books) {
+      await createScans(page, { newGroup: { title: b.title, author: b.author, category: b.category, description: b.description ?? '' }, items: [{ text: b.text, engine: 'manual' }] });
+    }
+    await page.goto('/escanear');
+    await openStep(page, '¿Dónde se guarda?');
+    await page.getByRole('button', { name: /^Libro o grupo/ }).click();
+    // Solo los recientes como accesos rápidos; el resto, con el buscador.
+    await expect(page.getByRole('group', { name: 'Grupo' }).getByRole('button')).toHaveCount(5);
+
+    await page.getByRole('button', { name: 'Buscar entre tus 6 grupos' }).click();
+    const picker = page.getByRole('dialog', { name: 'Buscar grupo' });
+    const results = picker.getByRole('list', { name: 'Grupos encontrados' }).getByRole('listitem');
+    await expect(results).toHaveCount(6);
+
+    // Sin tildes y por autor.
+    await picker.getByLabel('Texto a buscar').fill('garcia marquez');
+    await expect(results).toHaveCount(1);
+    await expect(results.first()).toContainText('Cien años de soledad');
+    await expect(results.first().getByText('Autor', { exact: true })).toBeVisible();
+
+    // Por la descripción.
+    await picker.getByLabel('Texto a buscar').fill('navidad');
+    await expect(results).toHaveCount(1);
+    await expect(results.first()).toContainText('Recetario de la abuela');
+
+    // No recuerdo el nombre, pero sí una frase del texto.
+    await picker.getByLabel('Texto a buscar').fill('molinos de viento');
+    await expect(results).toHaveCount(1);
+    await expect(results.first()).toContainText('Libro sin nombre claro');
+    await expect(results.first()).toContainText('1 coincidencia en el texto');
+    await picker.getByRole('button', { name: /Buscar también dentro del texto/ }).click();
+    await expect(picker.getByText('Ningún grupo coincide')).toBeVisible();
+    await picker.getByRole('button', { name: /Buscar también dentro del texto/ }).click();
+    await expect(results).toHaveCount(1);
+
+    // Filtro por categoría y orden alfabético.
+    await picker.getByRole('button', { name: 'Quitar filtros' }).click();
+    await picker.getByRole('group', { name: 'Filtrar grupos' }).getByRole('button', { name: /Historia/ }).click();
+    await expect(results).toHaveCount(1);
+    await expect(picker.getByTestId('group-picker-count')).toHaveText('1 de 6 grupos');
+    await picker.getByRole('group', { name: 'Filtrar grupos' }).getByRole('button', { name: /Historia/ }).click();
+    await picker.getByRole('button', { name: 'A–Z' }).click();
+    await expect(results.first()).toContainText('Apuntes de química');
+
+    // Al elegirlo aparece seleccionado entre los accesos rápidos aunque no fuera reciente.
+    await picker.getByLabel('Texto a buscar').fill('molinos');
+    await picker.getByRole('button', { name: 'Elegir Libro sin nombre claro' }).click();
+    await expect(picker).toBeHidden();
+    await expect(page.getByRole('group', { name: 'Grupo' }).getByRole('button', { name: 'Libro sin nombre claro' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('se añadirán al final de «Libro sin nombre claro»')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Grupo' }).getByRole('button')).toHaveCount(5);
   });
 
   test('una API key inválida detiene la cola y muestra el error', async ({ page }) => {

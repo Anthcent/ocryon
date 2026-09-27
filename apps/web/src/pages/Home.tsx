@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { BookOpen, ChevronRight, FileText, BarChart3, ScanLine, Type, WifiOff } from 'lucide-react';
+import { BookOpen, ChevronRight, FileScan, FileText, BarChart3, ScanLine, Type, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
@@ -127,11 +127,18 @@ export function HomePage() {
         <StatTile icon={<Type />} tone="text-fox" label="Palabras" value={stats.totals.words} />
       </div>
 
-      <Link to="/escanear" className="block">
-        <Button block size="lg" icon={<ScanLine className="size-6" />}>
-          Empezar a escanear
-        </Button>
-      </Link>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Link to="/escanear" className="block">
+          <Button block size="lg" icon={<ScanLine className="size-6" />}>
+            Empezar a escanear
+          </Button>
+        </Link>
+        <Link to="/documentos/nuevo" className="block">
+          <Button block size="lg" variant="danger" icon={<FileScan className="size-6" />}>
+            Escanear documento
+          </Button>
+        </Link>
+      </div>
 
       {stats.recentGroups.length > 0 && (
         <section>

@@ -1,8 +1,9 @@
 import clsx from 'clsx';
 import { BookOpen, ChevronRight, Clock, FileText, Layers, Search as SearchIcon, Sparkles, X } from 'lucide-react';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Mascot } from '../components/Logo';
+import { Snippet } from '../components/Snippet';
 import { Spinner } from '../components/ui';
 import { api } from '../lib/api';
 import { categoryEmoji, GROUP_STYLES } from '../lib/constants';
@@ -10,24 +11,6 @@ import type { Group, SearchResult } from '../lib/types';
 
 type TypeFilter = 'all' | 'group' | 'individual';
 const RECENT_KEY = 'ocryon:recent-searches';
-
-/** El servidor marca las coincidencias con \u0002…\u0003; se convierten en <mark> sin usar HTML crudo. */
-function Snippet({ value }: { value: string }) {
-  const parts = value.split(/(\u0002[^\u0003]*\u0003)/);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith('\u0002') ? (
-          <mark key={i} className="hit">
-            {part.slice(1, -1)}
-          </mark>
-        ) : (
-          <Fragment key={i}>{part}</Fragment>
-        ),
-      )}
-    </>
-  );
-}
 
 function loadRecent(): string[] {
   try {

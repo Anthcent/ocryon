@@ -1,5 +1,8 @@
 import type {
   Analysis,
+  CustomTemplate,
+  DocField,
+  SavedDocument,
   Engine,
   Group,
   GroupInput,
@@ -125,7 +128,23 @@ export const api = {
       request<{ scan: Scan }>(`/scans/${id}`, { method: 'PATCH', json: data }),
     remove: (id: number) => request<void>(`/scans/${id}`, { method: 'DELETE' }),
   },
-  search: (q: string, filters: { groupId?: number; type?: 'all' | 'group' | 'individual'; category?: string } = {}) =>
+  documents: {
+    list: (params: { template?: string; q?: string } = {}) =>
+      request<{ documents: SavedDocument[]; counts: { templateKey: string; count: number }[] }>(`/documents${qs(params)}`),
+    get: (id: number) => request<{ document: SavedDocument }>(`/documents/${id}`),
+    create: (data: Omit<SavedDocument, 'id' | 'createdAt' | 'updatedAt'>) =>
+      request<{ document: SavedDocument }>('/documents', { method: 'POST', json: data }),
+    update: (id: number, data: { title?: string; fields?: DocField[] }) =>
+      request<{ document: SavedDocument }>(`/documents/${id}`, { method: 'PATCH', json: data }),
+    remove: (id: number) => request<void>(`/documents/${id}`, { method: 'DELETE' }),
+    extract: (fields: Omit<DocField, 'value'>[], text: string, documentType: string) =>
+      request<{ values: Record<string, string> }>('/documents/extract', { method: 'POST', json: { fields, text, documentType } }),
+    templates: () => request<{ templates: CustomTemplate[] }>('/documents/templates'),
+    createTemplate: (data: { name: string; emoji: string; fields: CustomTemplate['fields'] }) =>
+      request<{ template: CustomTemplate }>('/documents/templates', { method: 'POST', json: data }),
+    removeTemplate: (id: number) => request<void>(`/documents/templates/${id}`, { method: 'DELETE' }),
+  },
+  search: (q: string, filters: { groupId?: number; type?: 'all' | 'group' | 'individual'; category?: string; limit?: number } = {}) =>
     request<{ results: SearchResult[]; total: number }>(`/search${qs({ q, ...filters })}`),
   stats: () => request<Stats>(`/stats${qs({ tz: -new Date().getTimezoneOffset() })}`),
   analyses: {

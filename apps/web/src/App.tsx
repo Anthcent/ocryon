@@ -6,6 +6,9 @@ import { Layout } from './components/Layout';
 import { PageLoader } from './components/ui';
 import { AuthPage } from './pages/Auth';
 import { CatalogPage } from './pages/Catalog';
+import { DocumentDetailPage } from './pages/DocumentDetail';
+import { DocumentNewPage } from './pages/DocumentNew';
+import { DocumentsPage } from './pages/Documents';
 import { GroupDetailPage } from './pages/GroupDetail';
 import { HomePage } from './pages/Home';
 import { ScanDetailPage } from './pages/ScanDetail';
@@ -36,6 +39,9 @@ function PrivateApp() {
             <Route path="catalogo" element={<CatalogPage />} />
             <Route path="catalogo/grupo/:id" element={<GroupDetailPage />} />
             <Route path="escaneo/:id" element={<ScanDetailPage />} />
+            <Route path="documentos" element={<DocumentsPage />} />
+            <Route path="documentos/nuevo" element={<DocumentNewPage />} />
+            <Route path="documentos/:id" element={<DocumentDetailPage />} />
             <Route path="buscar" element={<SearchPage />} />
             <Route path="ajustes" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

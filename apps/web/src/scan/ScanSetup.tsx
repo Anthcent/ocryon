@@ -1,12 +1,13 @@
 import clsx from 'clsx';
-import { BookOpen, Check, ChevronDown, Cpu, FileText, Files, KeyRound, Plus, Sparkles, Zap } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { BookOpen, Check, ChevronDown, Cpu, FileText, Files, KeyRound, Plus, Search, Sparkles, Zap } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { LessonProgress } from '../components/ActionTile';
 import { GroupFields } from '../components/GroupFields';
 import { Toggle } from '../components/ui';
 import { ENGINES, GROUP_STYLES, LANGUAGES } from '../lib/constants';
 import type { Engine, Group, GroupInput } from '../lib/types';
+import { GroupPicker } from './GroupPicker';
 
 export type Mode = 'individual' | 'group';
 export const NEW_GROUP = 'new';
@@ -154,6 +155,8 @@ export function destinationSummary({ mode, groups, groupId, newGroup }: Destinat
   return `Grupo: ${groups.find((g) => String(g.id) === groupId)?.title ?? ''}`;
 }
 
+const QUICK_GROUPS = 4;
+
 export function DestinationPanel(props: DestinationProps) {
   const { mode, groups, groupId, sheets } = props;
   const selectedGroup = groups.find((g) => String(g.id) === groupId);
@@ -161,6 +164,10 @@ export function DestinationPanel(props: DestinationProps) {
   const saved = isNew ? 0 : (selectedGroup?.scanCount ?? 0);
   const totalPages = isNew ? props.newGroup.totalPages : (selectedGroup?.totalPages ?? null);
   const afterSave = saved + sheets.count;
+  const [picking, setPicking] = useState(false);
+  // Accesos rápidos: los grupos más recientes y, si no está entre ellos, el elegido.
+  const recent = groups.slice(0, QUICK_GROUPS);
+  const quickGroups = selectedGroup && !recent.includes(selectedGroup) ? [selectedGroup, ...recent.slice(0, QUICK_GROUPS - 1)] : recent;
 
   return (
     <StepPanel>
@@ -191,13 +198,25 @@ export function DestinationPanel(props: DestinationProps) {
               <Chip selected={isNew} onClick={() => props.setGroupId(NEW_GROUP)}>
                 <Plus className="size-4" /> Nuevo
               </Chip>
-              {groups.map((g) => (
+              {quickGroups.map((g) => (
                 <Chip key={g.id} selected={groupId === String(g.id)} onClick={() => props.setGroupId(String(g.id))}>
                   <span className={clsx('size-3 rounded-full', GROUP_STYLES[g.color].bg)} />
                   <span className="max-w-48 truncate">{g.title}</span>
                 </Chip>
               ))}
             </div>
+            {groups.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setPicking(true)}
+                className="mt-2 flex w-full items-center gap-3 rounded-2xl border-2 border-b-4 border-macaw-dark bg-macaw px-3 py-2.5 text-left font-extrabold text-white transition hover:brightness-110 active:translate-y-[2px] active:border-b-2"
+              >
+                <Search className="size-5 shrink-0" strokeWidth={3} />
+                <span className="flex-1">Buscar entre tus {groups.length} grupos</span>
+                <span className="hidden text-xs font-bold text-white/85 sm:inline">por nombre, autor o texto</span>
+              </button>
+            )}
+            <GroupPicker open={picking} onClose={() => setPicking(false)} groups={groups} selectedId={groupId} onSelect={props.setGroupId} />
           </div>
 
           {isNew ? (

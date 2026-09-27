@@ -9,6 +9,7 @@ import { requireCustomHeader } from './middleware/csrf.js';
 import { errorHandler } from './middleware/error.js';
 import { analysesRouter } from './routes/analyses.js';
 import { authRouter } from './routes/auth.js';
+import { documentsRouter } from './routes/documents.js';
 import { groupsRouter } from './routes/groups.js';
 import { ocrRouter } from './routes/ocr.js';
 import { scansRouter } from './routes/scans.js';
@@ -54,6 +55,7 @@ export function createApp(ctx: AppContext, options: { webDist?: string } = {}) {
   api.use('/search', searchRouter(ctx));
   api.use('/stats', statsRouter(ctx));
   api.use('/analyses', analysesRouter(ctx));
+  api.use('/documents', documentsRouter(ctx));
   api.use((_req, res) => res.status(404).json({ error: 'Ruta no encontrada', code: 'not_found' }));
   app.use('/api', api);
 

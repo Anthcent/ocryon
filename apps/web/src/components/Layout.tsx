@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { BookOpen, BookOpenText, FileText, House, Library, LogOut, Plus, ScanLine, Search, Settings, Type } from 'lucide-react';
+import { BookOpen, BookOpenText, FileScan, FileText, House, Library, LogOut, Plus, ScanLine, Search, Settings, Type } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
@@ -17,6 +17,7 @@ const NAV = [
   { to: '/', label: 'Inicio', icon: House, end: true, tone: 'text-feather-dark bg-feather-light', active: 'border-feather bg-feather-light text-feather-dark' },
   { to: '/escanear', label: 'Escanear', icon: ScanLine, tone: 'text-macaw-dark bg-macaw-light', active: 'border-macaw bg-macaw-light text-macaw-dark' },
   { to: '/catalogo', label: 'Catálogo', icon: Library, tone: 'text-fox-dark bg-fox-light', active: 'border-fox bg-fox-light text-fox-dark' },
+  { to: '/documentos', label: 'Documentos', icon: FileScan, tone: 'text-cardinal-dark bg-cardinal-light', active: 'border-cardinal bg-cardinal-light text-cardinal-dark' },
   { to: '/buscar', label: 'Buscar', icon: Search, tone: 'text-beetle-dark bg-beetle-light', active: 'border-beetle bg-beetle-light text-beetle-dark' },
   { to: '/ajustes', label: 'Ajustes', icon: Settings, tone: 'text-wolf bg-polar', active: 'border-hare bg-polar text-eel' },
 ];
@@ -24,9 +25,12 @@ const NAV = [
 const MOBILE_ACTIVE: Record<string, string> = {
   '/': 'text-feather-dark bg-feather-light',
   '/catalogo': 'text-fox-dark bg-fox-light',
+  '/documentos': 'text-cardinal-dark bg-cardinal-light',
   '/buscar': 'text-beetle-dark bg-beetle-light',
-  '/ajustes': 'text-eel bg-polar',
 };
+
+/** En móvil el botón de escanear va en el centro; Ajustes pasa a la barra superior. */
+const MOBILE_NAV = ['/', '/catalogo', '/escanear', '/documentos', '/buscar'].map((to) => NAV.find((n) => n.to === to)!);
 
 /** Estadísticas del usuario para la barra superior; se refrescan al cambiar de pantalla. */
 function useStats() {
@@ -133,6 +137,13 @@ export function Layout() {
             <StatChip icon={<FileText className="size-5" />} value={formatNumber(stats?.totals.scans ?? 0)} label="Escaneos" className="text-macaw" />
             <StatChip icon={<BookOpen className="size-5" />} value={formatNumber(stats?.totals.groups ?? 0)} label="Libros" className="text-feather-dark" from="sm" />
             <StatChip icon={<Type className="size-5" />} value={formatNumber(stats?.totals.words ?? 0)} label="Palabras" className="text-beetle-dark" from="md" />
+            <NavLink
+              to="/ajustes"
+              aria-label="Ajustes"
+              className={({ isActive }) => clsx('rounded-xl p-2 transition lg:hidden', isActive ? 'bg-polar text-eel' : 'text-hare hover:bg-polar')}
+            >
+              <Settings className="size-6" strokeWidth={2.5} />
+            </NavLink>
           </div>
         </div>
       </header>
@@ -144,7 +155,7 @@ export function Layout() {
       {/* Navegación inferior (móvil) */}
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t-2 border-swan bg-white lg:hidden">
         <div className="mx-auto grid h-16 max-w-md grid-cols-5 items-center px-1">
-          {NAV.map(({ to, label, icon: Icon, end }) =>
+          {MOBILE_NAV.map(({ to, label, icon: Icon, end }) =>
             to === '/escanear' ? (
               <NavLink key={to} to={to} aria-label={label} className="flex justify-center">
                 <span className="-mt-7 flex size-16 items-center justify-center rounded-full border-4 border-white bg-feather text-white shadow-[0_4px_0_#58a700] transition active:translate-y-1 active:shadow-none">
@@ -156,7 +167,7 @@ export function Layout() {
                 {({ isActive }) => (
                   <span
                     className={clsx(
-                      'flex flex-col items-center gap-0.5 rounded-2xl px-2.5 py-1 text-[11px] font-extrabold transition',
+                      'flex flex-col items-center gap-0.5 rounded-2xl px-2 py-1 text-[11px] font-extrabold transition',
                       isActive ? MOBILE_ACTIVE[to] : 'text-hare',
                     )}
                   >
