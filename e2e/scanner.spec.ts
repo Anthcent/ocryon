@@ -143,8 +143,8 @@ test.describe('Escáner', () => {
 
     await expect(page).toHaveURL(/\/catalogo\/grupo\/\d+$/);
     await expect(page.getByRole('heading', { name: 'El Quijote' })).toBeVisible();
-    await expect(page.getByText('Miguel de Cervantes')).toBeVisible();
-    await expect(page.getByText('2 de 100 páginas escaneadas')).toBeVisible();
+    await expect(page.getByText('de Miguel de Cervantes')).toBeVisible();
+    await expect(page.getByText('2 / 100')).toBeVisible();
     await expect(page.getByText('Página 1')).toBeVisible();
     await expect(page.getByText('Página 2')).toBeVisible();
   });
@@ -186,7 +186,7 @@ test.describe('Escáner', () => {
     await page.getByRole('button', { name: 'Guardar (1)' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/catalogo/grupo/${groupId}$`));
-    await expect(page.getByText('2 páginas', { exact: true })).toBeVisible();
+    await expect(page.locator('a[href^="/escaneo/"]')).toHaveCount(2);
     await expect(page.getByRole('link', { name: /Página 2/ })).toBeVisible();
   });
 

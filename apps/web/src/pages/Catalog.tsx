@@ -1,15 +1,16 @@
 import clsx from 'clsx';
-import { BookOpen, BookOpenText, FileText, Plus, ScanLine } from 'lucide-react';
+import { BookOpen, BookOpenText, FileText, Library, Plus, ScanLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { LessonProgress } from '../components/ActionTile';
+import { BookCover } from '../components/BookCover';
 import { EMPTY_GROUP, GroupFields } from '../components/GroupFields';
-import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, PageLoader, Segmented } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Input, Modal, PageLoader, Segmented } from '../components/ui';
 import { api } from '../lib/api';
 import { categoryEmoji, ENGINE_LABEL, GROUP_STYLES } from '../lib/constants';
 import { formatNumber, timeAgo } from '../lib/format';
-import type { Group, GroupInput, Scan } from '../lib/types';
+import type { Group, GroupInput, Scan, Stats } from '../lib/types';
 
 type View = 'grupos' | 'individuales';
 const PAGE_SIZE = 30;
@@ -22,15 +23,7 @@ export function CatalogPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Catálogo"
-        subtitle="Tus libros y documentos escaneados."
-        actions={
-          <Button variant="ghost" size="sm" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-            Nuevo grupo
-          </Button>
-        }
-      />
+      <LibraryHero onCreate={() => setCreating(true)} />
       <div className="mb-4 grid gap-3 sm:grid-cols-[320px_1fr]">
         <Segmented<View>
           value={view}
@@ -92,7 +85,7 @@ function GroupsList({ filter }: { filter: string }) {
           ))}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {visible.map((g) => (
           <BookCard key={g.id} group={g} />
         ))}
@@ -119,49 +112,99 @@ function CategoryChip({ selected, onClick, label, emoji }: { selected: boolean; 
   );
 }
 
-/** Tarjeta de un grupo con aspecto de libro: lomo, portada de color y avance de páginas. */
+/** Tarjeta de un libro: portada 3D, datos, avance y accesos directos. */
 function BookCard({ group: g }: { group: Group }) {
   const style = GROUP_STYLES[g.color];
   const pages = g.scanCount ?? 0;
   return (
-    <Card interactive className="group relative overflow-hidden">
-      <Link to={`/catalogo/grupo/${g.id}`} className="block">
-        <div className={clsx('relative flex h-36 flex-col justify-end overflow-hidden p-4 pl-7 text-white', style.bg)}>
-          {/* Lomo del libro */}
-          <span className="absolute inset-y-0 left-0 w-3 bg-black/15" />
-          <span className="absolute inset-y-0 left-3 w-px bg-white/30" />
-          <BookOpen className="absolute -right-3 -top-3 size-24 text-white/15" />
-          {g.category && (
-            <span className="absolute left-7 top-3 rounded-lg bg-white/25 px-2 py-0.5 text-xs font-extrabold">
-              {categoryEmoji(g.category)} {g.category}
-            </span>
-          )}
-          <div className="line-clamp-2 text-xl font-black leading-tight">{g.title}</div>
-          {g.author && <div className="truncate text-sm font-bold text-white/85">{g.author}</div>}
-        </div>
-        <div className="space-y-2 p-4">
+    <div className={clsx('group relative flex gap-4 overflow-hidden rounded-3xl border-2 border-b-[5px] p-4 transition hover:-translate-y-0.5 hover:shadow-lg', style.soft, style.border)}>
+      <span className={clsx('pointer-events-none absolute -right-10 -top-10 size-32 rounded-full opacity-15', style.bg)} />
+      <Link to={`/catalogo/grupo/${g.id}`} aria-hidden tabIndex={-1}>
+        <BookCover group={g} size="md" />
+      </Link>
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {g.category && (
+          <span className={clsx('mb-1 self-start rounded-lg px-2 py-0.5 text-[11px] font-extrabold text-white', style.bg)}>
+            {categoryEmoji(g.category)} {g.category}
+          </span>
+        )}
+        <Link to={`/catalogo/grupo/${g.id}`} className="line-clamp-2 text-lg font-black leading-tight text-eel hover:underline">
+          {g.title}
+        </Link>
+        {g.author && <div className={clsx('truncate text-sm font-extrabold', style.text)}>{g.author}</div>}
+        <div className="mt-2 space-y-1.5">
           {g.totalPages ? (
             <LessonProgress value={(pages / g.totalPages) * 100} label={`${pages}/${g.totalPages}`} />
           ) : (
             <div className="text-sm font-extrabold text-wolf">
-              {pages} {pages === 1 ? 'hoja escaneada' : 'hojas escaneadas'}
+              📄 {pages} {pages === 1 ? 'hoja escaneada' : 'hojas escaneadas'}
             </div>
           )}
-          <div className="flex items-center gap-2 text-xs font-bold text-hare">
-            <span>{formatNumber(g.wordCount ?? 0)} palabras</span>·<span>{timeAgo(g.updatedAt)}</span>
+          <div className="text-xs font-bold text-hare">
+            {formatNumber(g.wordCount ?? 0)} palabras · {timeAgo(g.updatedAt)}
           </div>
         </div>
-      </Link>
-      {pages > 0 && (
-        <Link
-          to={`/catalogo/grupo/${g.id}?libro=1`}
-          aria-label={`Leer «${g.title}» en modo libro`}
-          className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-xl border-2 border-b-4 border-white/70 bg-white px-2.5 py-1.5 text-xs font-extrabold uppercase text-eel shadow-sm transition hover:bg-polar active:translate-y-[2px] active:border-b-2"
+        <div className="mt-auto flex gap-2 pt-3">
+          <Link
+            to={`/catalogo/grupo/${g.id}`}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border-2 border-b-4 border-swan bg-white px-3 py-2 text-xs font-extrabold uppercase text-wolf transition hover:bg-polar active:translate-y-[2px] active:border-b-2"
+          >
+            Abrir
+          </Link>
+          {pages > 0 && (
+            <Link
+              to={`/catalogo/grupo/${g.id}?libro=1`}
+              aria-label={`Leer «${g.title}» en modo libro`}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border-2 border-b-4 border-feather-dark bg-feather px-3 py-2 text-xs font-extrabold uppercase text-white transition hover:brightness-105 active:translate-y-[2px] active:border-b-2"
+            >
+              <BookOpenText className="size-4" /> Leer
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Cabecera del catálogo con el resumen de la biblioteca. */
+function LibraryHero({ onCreate }: { onCreate: () => void }) {
+  const [stats, setStats] = useState<Stats | null>(null);
+  useEffect(() => {
+    api.stats().then(setStats).catch(() => {});
+  }, []);
+  const tiles = [
+    { label: 'libros', value: stats?.totals.groups ?? 0, emoji: '📚' },
+    { label: 'sueltos', value: stats?.totals.individual ?? 0, emoji: '📝' },
+    { label: 'palabras', value: formatNumber(stats?.totals.words ?? 0), emoji: '✍️' },
+  ];
+  return (
+    <div className="relative mb-6 overflow-hidden rounded-[2rem] border-b-[6px] border-fox-dark bg-gradient-to-br from-fox via-[#ffab2e] to-bee p-5 text-white sm:p-7">
+      <Library className="pointer-events-none absolute -bottom-8 -right-6 size-48 text-white/15" />
+      <div className="relative flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black">Tu biblioteca</h1>
+          <p className="font-bold text-white/90">Tus libros y documentos escaneados, listos para leer.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="inline-flex items-center gap-2 rounded-2xl border-2 border-b-4 border-white/70 bg-white px-4 py-2.5 text-sm font-extrabold uppercase text-fox-dark transition hover:bg-fox-light active:translate-y-[2px] active:border-b-2"
         >
-          <BookOpenText className="size-4" /> Modo libro
-        </Link>
-      )}
-    </Card>
+          <Plus className="size-5" /> Nuevo grupo
+        </button>
+      </div>
+      <div className="relative mt-5 grid max-w-lg grid-cols-3 gap-2 sm:gap-3">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-2xl bg-white/20 px-3 py-2.5 backdrop-blur">
+            <div className="text-2xl font-black leading-none">
+              <span className="mr-1 text-lg">{t.emoji}</span>
+              {t.value}
+            </div>
+            <div className="mt-1 text-xs font-extrabold uppercase text-white/85">{t.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

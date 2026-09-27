@@ -210,7 +210,7 @@ export function ScanDetailPage() {
         </div>
 
         {/* Columna lateral en escritorio */}
-        <aside className="hidden space-y-4 lg:sticky lg:top-6 lg:block">
+        <aside className="hidden space-y-4 lg:sticky lg:top-24 lg:block">
           <div className="grid grid-cols-2 gap-2">{actions(false)}</div>
           <Card className="space-y-3 p-4 text-sm">
             <Detail label="Grupo" value={scan.groupTitle ?? 'Individual'} />

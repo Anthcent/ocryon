@@ -45,11 +45,13 @@ export function HomePage() {
   return (
     <div className="space-y-6">
       {/* Saludo */}
-      <div className="flex items-center gap-4">
-        <Mascot className="size-16 shrink-0" />
-        <div>
-          <h1 className="text-2xl font-black sm:text-3xl">¡Hola, {user?.name.split(' ')[0]}!</h1>
-          <p className="text-wolf">{stats.totals.scans === 0 ? 'Escanea tu primera página para empezar.' : '¿Qué vamos a escanear hoy?'}</p>
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-[2rem] border-b-[6px] border-feather-dark bg-gradient-to-br from-feather via-[#6bd40a] to-[#89e219] p-5 text-white sm:p-7">
+        <span className="pointer-events-none absolute -right-10 -top-12 size-44 rounded-full bg-white/15" />
+        <span className="pointer-events-none absolute -bottom-16 right-28 size-32 rounded-full bg-white/10" />
+        <Mascot className="relative size-16 shrink-0 rounded-2xl shadow-lg ring-4 ring-white/40 sm:size-20" />
+        <div className="relative">
+          <h1 className="text-2xl font-black sm:text-4xl">¡Hola, {user?.name.split(' ')[0]}!</h1>
+          <p className="font-bold text-white/90">{stats.totals.scans === 0 ? 'Escanea tu primera página para empezar.' : '¿Qué vamos a escanear hoy?'}</p>
         </div>
       </div>
 
@@ -154,12 +156,19 @@ export function HomePage() {
   );
 }
 
+const TILE_TONES: Record<string, string> = {
+  'text-feather': 'border-feather/50 bg-feather-light',
+  'text-macaw': 'border-macaw/50 bg-macaw-light',
+  'text-beetle': 'border-beetle/50 bg-beetle-light',
+  'text-fox': 'border-fox/50 bg-fox-light',
+};
+
 function StatTile({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
   return (
-    <Card className="p-4">
-      <div className={clsx('mb-2 [&>svg]:size-6', tone)}>{icon}</div>
+    <div className={clsx('rounded-2xl border-2 border-b-4 p-4', TILE_TONES[tone])}>
+      <div className={clsx('mb-2 flex size-10 items-center justify-center rounded-xl bg-white shadow-sm [&>svg]:size-6', tone)}>{icon}</div>
       <div className="text-2xl font-black">{formatNumber(value)}</div>
       <div className="text-sm font-bold text-wolf">{label}</div>
-    </Card>
+    </div>
   );
 }

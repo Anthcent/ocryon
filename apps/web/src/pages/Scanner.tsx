@@ -334,7 +334,7 @@ export function ScannerPage() {
 
       {/* Barra de acciones fija, siempre a la vista mientras hay páginas */}
       {pages.length > 0 && (
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t-2 border-swan bg-white/95 backdrop-blur lg:bottom-0 lg:left-64">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t-2 border-swan bg-white/95 backdrop-blur lg:bottom-0 lg:left-72">
           <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
             <div className="flex items-center gap-3 sm:flex-1">
               <span className="shrink-0 text-sm font-extrabold">

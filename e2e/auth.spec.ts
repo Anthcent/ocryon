@@ -62,6 +62,6 @@ test.describe('Autenticación', () => {
       await expect(bottomNav).toBeHidden();
       await sidebar.getByRole('link', { name: 'Catálogo' }).click();
     }
-    await expect(page.getByRole('heading', { name: 'Catálogo' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tu biblioteca' })).toBeVisible();
   });
 });

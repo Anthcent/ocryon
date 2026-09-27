@@ -33,16 +33,16 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
     await createScans(page, { newGroup: { title: 'Poesía' }, items: [{ text: 'Verde que te quiero verde', engine: 'manual' }] });
     await page.goto('/catalogo');
     await page.getByLabel('Filtrar', { exact: true }).fill('poesia');
-    await expect(page.getByText('Poesía')).toBeVisible();
-    await expect(page.getByText('Historia de Roma antigua')).toBeHidden();
+    await expect(page.getByRole('link', { name: 'Poesía', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Historia de Roma antigua', exact: true })).toBeHidden();
     await page.getByLabel('Filtrar', { exact: true }).fill('');
 
-    await page.getByText('Historia de Roma antigua').click();
+    await page.getByRole('link', { name: 'Historia de Roma antigua', exact: true }).click();
     await page.getByRole('button', { name: 'Borrar grupo' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Borrar todo' }).click();
     await expect(page).toHaveURL(/\/catalogo$/);
     await expectToast(page, 'Grupo borrado');
-    await expect(page.getByText('Historia de Roma antigua')).toBeHidden();
+    await expect(page.getByRole('link', { name: 'Historia de Roma antigua', exact: true })).toBeHidden();
   });
 
   test('ficha de grupo: reordenar, texto completo, exportar, copiar y borrar páginas', async ({ page }) => {
@@ -56,7 +56,7 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
       ],
     });
     await page.goto(`/catalogo/grupo/${groupId}`);
-    await expect(page.getByText('3 páginas', { exact: true })).toBeVisible();
+    await expect(page.locator('a[href^="/escaneo/"]')).toHaveCount(3);
 
     // Bajar la primera: el nuevo orden persiste al recargar.
     const saved = page.waitForResponse((r) => r.url().includes('/order') && r.status() === 204);
@@ -216,7 +216,8 @@ test.describe('Modo libro', () => {
     await expect(book.getByRole('heading', { name: 'El Principito' })).toBeVisible(); // portada
     await expect(book.getByText('Antoine de Saint-Exupéry').first()).toBeVisible();
 
-    await book.getByRole('button', { name: 'Siguiente' }).click();
+    // En móvil hay botón «Siguiente»; en escritorio, flechas redondas a los lados del libro.
+    await book.getByRole('button', { name: /^(Siguiente|Página siguiente)$/ }).click();
     await expect(book.getByTestId('flipping-leaf')).toBeVisible();
     await expect(book.getByTestId('flipping-leaf')).toHaveCount(0);
     await expect(book.getByText('Texto de la hoja 1')).toBeVisible();
@@ -224,12 +225,35 @@ test.describe('Modo libro', () => {
     await expect(book.getByText('— 41 —')).toHaveCount(1);
 
     await page.keyboard.press('ArrowRight');
+    await expect(book.getByTestId('flipping-leaf')).toHaveCount(0);
     await expect(book.getByText(/Texto de la hoja (2|3)/).first()).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(book).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`/catalogo/grupo/${groupId}$`));
 
-    // Desde la ficha del grupo.
+    // Desde la ficha del grupo; se pasa la página arrastrándola con el dedo o el ratón.
+    await page.getByRole('button', { name: 'Abrir en modo libro' }).click();
+    const opened = page.getByRole('dialog', { name: 'Modo libro: El Principito' });
+    const box = (await opened.getByTestId('book').boundingBox())!;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.9, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, y, { steps: 6 });
+    await expect(opened.getByTestId('flipping-leaf')).toBeVisible();
+    await page.mouse.move(box.x + box.width * 0.2, y, { steps: 6 });
+    await page.mouse.up();
+    await expect(opened.getByTestId('flipping-leaf')).toHaveCount(0);
+    await expect(opened.getByText('Texto de la hoja 1')).toBeVisible();
+
+    // Un arrastre corto se cancela y la página no cambia.
+    await page.mouse.move(box.x + box.width * 0.9, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.85, y, { steps: 3 });
+    await page.mouse.up();
+    await expect(opened.getByTestId('flipping-leaf')).toHaveCount(0);
+    await expect(opened.getByText('Texto de la hoja 1')).toBeVisible();
+    await page.keyboard.press('Escape');
+
     await page.getByRole('button', { name: 'Abrir en modo libro' }).click();
     await expect(page.getByRole('dialog', { name: 'Modo libro: El Principito' })).toBeVisible();
     await page.getByRole('slider', { name: 'Ir a la página' }).fill('2');
