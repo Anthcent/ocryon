@@ -1,11 +1,15 @@
 import clsx from 'clsx';
-import { BookOpen, FileText, Flame, House, Library, LogOut, ScanLine, Search, Settings, Type } from 'lucide-react';
+import { BookOpen, BookOpenText, FileText, House, Library, LogOut, Plus, ScanLine, Search, Settings, Type } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../lib/api';
+import { GROUP_STYLES } from '../lib/constants';
 import { formatNumber } from '../lib/format';
 import type { Stats } from '../lib/types';
+import { useScanSession } from '../scan/ScanSession';
+import { LessonProgress } from './ActionTile';
+import { BookCover } from './BookCover';
 import { Logo } from './Logo';
 
 /** Cada sección tiene su color, como las unidades de Duolingo. */
@@ -23,8 +27,6 @@ const MOBILE_ACTIVE: Record<string, string> = {
   '/buscar': 'text-beetle-dark bg-beetle-light',
   '/ajustes': 'text-eel bg-polar',
 };
-
-const WEEKDAY = new Intl.DateTimeFormat('es', { weekday: 'narrow', timeZone: 'UTC' });
 
 /** Estadísticas del usuario para la barra superior; se refrescan al cambiar de pantalla. */
 function useStats() {
@@ -69,7 +71,7 @@ function StatChip({
 export function Layout() {
   const { user, logout } = useAuth();
   const stats = useStats();
-  const streak = stats?.streak ?? 0;
+  const pendingPages = useScanSession().pages.length;
 
   return (
     <div className="min-h-dvh bg-white lg:pl-72">
@@ -97,35 +99,8 @@ export function Layout() {
           ))}
         </nav>
 
-        {/* Racha de la semana */}
-        <div className="mt-6 rounded-2xl border-2 border-b-4 border-fox/40 bg-gradient-to-br from-fox-light to-bee-light p-4">
-          <div className="flex items-center gap-2">
-            <Flame className={clsx('size-7', streak > 0 ? 'text-fox' : 'text-hare')} fill="currentColor" />
-            <div>
-              <div className="text-lg font-black leading-none">
-                {streak} {streak === 1 ? 'día' : 'días'}
-              </div>
-              <div className="text-xs font-bold text-wolf">de racha</div>
-            </div>
-          </div>
-          {stats && (
-            <div className="mt-3 grid grid-cols-7 gap-1">
-              {stats.week.map((d) => (
-                <div key={d.day} className="flex flex-col items-center gap-1">
-                  <span
-                    className={clsx(
-                      'flex size-7 items-center justify-center rounded-full text-[10px]',
-                      d.count > 0 ? 'bg-fox text-white shadow-[0_2px_0_#e08600]' : 'bg-white/80 text-hare',
-                    )}
-                  >
-                    {d.count > 0 ? '🔥' : ''}
-                  </span>
-                  <span className="text-[10px] font-extrabold uppercase text-wolf">{WEEKDAY.format(new Date(`${d.day}T12:00:00Z`))}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Libro en el que se trabajó por última vez */}
+        <ContinueCard stats={stats} />
 
         <div className="mt-auto flex items-center gap-3 rounded-2xl border-2 border-swan p-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-beetle to-macaw text-lg font-black text-white">
@@ -146,7 +121,15 @@ export function Layout() {
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:px-6 lg:h-16">
           <Logo className="lg:hidden" />
           <div className="ml-auto flex items-center gap-1 sm:gap-2" data-testid="top-stats">
-            <StatChip icon={<Flame className="size-5" fill="currentColor" />} value={streak} label="Días de racha" className={streak > 0 ? 'text-fox' : 'text-hare'} />
+            {pendingPages > 0 && (
+              <Link
+                to="/escanear"
+                title="Hojas en el escáner sin guardar"
+                className="inline-flex items-center gap-1.5 rounded-xl border-2 border-b-4 border-bee-dark bg-bee px-2.5 py-1 text-sm font-black text-eel transition active:translate-y-[2px] active:border-b-2"
+              >
+                <ScanLine className="size-4" /> {pendingPages} <span className="hidden sm:inline">sin guardar</span>
+              </Link>
+            )}
             <StatChip icon={<FileText className="size-5" />} value={formatNumber(stats?.totals.scans ?? 0)} label="Escaneos" className="text-macaw" />
             <StatChip icon={<BookOpen className="size-5" />} value={formatNumber(stats?.totals.groups ?? 0)} label="Libros" className="text-feather-dark" from="sm" />
             <StatChip icon={<Type className="size-5" />} value={formatNumber(stats?.totals.words ?? 0)} label="Palabras" className="text-beetle-dark" from="md" />
@@ -186,6 +169,62 @@ export function Layout() {
           )}
         </div>
       </nav>
+    </div>
+  );
+}
+
+/** Tarjeta del menú lateral: acceso rápido al último libro en el que se trabajó. */
+function ContinueCard({ stats }: { stats: Stats | null }) {
+  const book = stats?.recentGroups[0];
+  if (!stats) return null;
+  if (!book) {
+    return (
+      <div className="mt-6 rounded-2xl border-2 border-b-4 border-macaw/40 bg-macaw-light p-4">
+        <div className="font-black text-macaw-dark">Empieza tu biblioteca</div>
+        <p className="mt-1 text-sm text-wolf">Escanea las páginas de un libro y guárdalas juntas.</p>
+        <Link
+          to="/escanear"
+          className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border-2 border-b-4 border-macaw-dark bg-macaw py-2 text-xs font-extrabold uppercase text-white active:translate-y-[2px] active:border-b-2"
+        >
+          <ScanLine className="size-4" /> Escanear un libro
+        </Link>
+      </div>
+    );
+  }
+  const style = GROUP_STYLES[book.color];
+  return (
+    <div className={clsx('mt-6 rounded-2xl border-2 border-b-4 p-3', style.soft, style.border)} data-testid="continue-card">
+      <div className="mb-2 text-[11px] font-black uppercase tracking-wide text-wolf">Sigue con tu libro</div>
+      <Link to={`/catalogo/grupo/${book.id}`} className="flex items-center gap-3">
+        <BookCover group={book} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-2 text-sm font-black leading-tight">{book.title}</div>
+          {book.author && <div className={clsx('truncate text-xs font-extrabold', style.text)}>{book.author}</div>}
+          <div className="mt-1 text-xs font-bold text-wolf">
+            {book.scanCount} {book.scanCount === 1 ? 'hoja' : 'hojas'}
+            {book.totalPages ? ` de ${book.totalPages}` : ''}
+          </div>
+        </div>
+      </Link>
+      {book.totalPages ? (
+        <div className="mt-2">
+          <LessonProgress value={(book.scanCount / book.totalPages) * 100} />
+        </div>
+      ) : null}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Link
+          to={`/catalogo/grupo/${book.id}?libro=1`}
+          className="flex items-center justify-center gap-1 rounded-xl border-2 border-b-4 border-feather-dark bg-feather py-1.5 text-[11px] font-extrabold uppercase text-white active:translate-y-[2px] active:border-b-2"
+        >
+          <BookOpenText className="size-3.5" /> Leer
+        </Link>
+        <Link
+          to={`/escanear?grupo=${book.id}`}
+          className="flex items-center justify-center gap-1 rounded-xl border-2 border-b-4 border-swan bg-white py-1.5 text-[11px] font-extrabold uppercase text-wolf active:translate-y-[2px] active:border-b-2"
+        >
+          <Plus className="size-3.5" /> Hojas
+        </Link>
+      </div>
     </div>
   );
 }

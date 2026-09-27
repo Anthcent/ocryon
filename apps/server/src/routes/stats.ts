@@ -7,18 +7,6 @@ function isoDay(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-/** Días consecutivos con escaneos, contando hasta hoy (o ayer, para no perder la racha a mitad del día). */
-export function computeStreak(days: Set<string>, today: Date): number {
-  const cursor = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-  if (!days.has(isoDay(cursor))) cursor.setUTCDate(cursor.getUTCDate() - 1);
-  let streak = 0;
-  while (days.has(isoDay(cursor))) {
-    streak++;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  return streak;
-}
-
 // Diferencia del usuario respecto a UTC en minutos (p. ej. -300 para Perú o Colombia).
 const querySchema = z.object({ tz: z.coerce.number().int().min(-840).max(840).default(0) });
 
@@ -56,7 +44,8 @@ export function statsRouter(ctx: AppContext) {
 
     const recentGroups = ctx.db
       .prepare(
-        `SELECT g.id, g.title, g.color, g.updated_at AS updatedAt, COUNT(s.id) AS scanCount
+        `SELECT g.id, g.title, g.author, g.category, g.color, g.total_pages AS totalPages, g.updated_at AS updatedAt,
+                COUNT(s.id) AS scanCount
            FROM groups g LEFT JOIN scans s ON s.group_id = g.id
           WHERE g.user_id = ? GROUP BY g.id ORDER BY g.updated_at DESC LIMIT 4`,
       )
@@ -64,7 +53,6 @@ export function statsRouter(ctx: AppContext) {
 
     res.json({
       totals: { ...totals, individual: totals.individual ?? 0, groups },
-      streak: computeStreak(new Set(counts.keys()), localNow),
       week,
       recentGroups,
     });

@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { BookOpen, ChevronRight, FileText, Flame, ScanLine, Type, WifiOff } from 'lucide-react';
+import { BookOpen, ChevronRight, FileText, BarChart3, ScanLine, Type, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
@@ -41,6 +41,7 @@ export function HomePage() {
 
   const noKeys = loaded && !settings.keys.ocrspace.configured && !settings.keys.gemini.configured;
   const maxDay = Math.max(1, ...stats.week.map((d) => d.count));
+  const weekTotal = stats.week.reduce((sum, d) => sum + d.count, 0);
 
   return (
     <div className="space-y-6">
@@ -81,32 +82,40 @@ export function HomePage() {
         </Card>
       )}
 
-      {/* Racha y semana */}
+      {/* Actividad de la semana: hojas escaneadas por día */}
       <Card className="p-5">
         <div className="flex items-center gap-4">
-          <div className={clsx('flex size-14 items-center justify-center rounded-2xl', stats.streak > 0 ? 'bg-fox-light text-fox' : 'bg-polar text-hare')}>
-            <Flame className="size-8" fill="currentColor" />
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-macaw-light text-macaw-dark">
+            <BarChart3 className="size-8" />
           </div>
           <div>
             <div className="text-2xl font-black">
-              {stats.streak} {stats.streak === 1 ? 'día' : 'días'} de racha
+              {weekTotal} {weekTotal === 1 ? 'hoja escaneada' : 'hojas escaneadas'}
             </div>
-            <div className="text-sm text-wolf">{stats.streak > 0 ? '¡Sigue así! Escanea hoy para no perderla.' : 'Escanea hoy para empezar una racha.'}</div>
+            <div className="text-sm text-wolf">
+              {weekTotal > 0 ? 'Tu actividad de los últimos 7 días.' : 'Esta semana aún no has escaneado nada.'}
+            </div>
           </div>
         </div>
         <div className="mt-5 grid grid-cols-7 gap-2">
-          {stats.week.map((d) => (
-            <div key={d.day} className="flex flex-col items-center gap-1.5">
-              <div className="flex h-20 w-full items-end overflow-hidden rounded-xl bg-polar">
-                <div
-                  className={clsx('w-full rounded-xl', d.count > 0 ? 'bg-fox' : 'bg-transparent')}
-                  style={{ height: `${(d.count / maxDay) * 100}%` }}
-                  title={`${d.count} escaneos`}
-                />
+          {stats.week.map((d, i) => {
+            const today = i === stats.week.length - 1;
+            return (
+              <div key={d.day} className="flex flex-col items-center gap-1.5">
+                <span className="h-4 text-xs font-black text-macaw-dark">{d.count > 0 ? d.count : ''}</span>
+                <div className="flex h-20 w-full items-end overflow-hidden rounded-xl bg-polar">
+                  <div
+                    className={clsx('w-full rounded-xl', d.count > 0 ? 'bg-macaw shadow-[inset_0_-4px_0_#1899d6]' : 'bg-transparent')}
+                    style={{ height: `${(d.count / maxDay) * 100}%` }}
+                    title={`${d.count} hojas`}
+                  />
+                </div>
+                <span className={clsx('text-xs font-extrabold uppercase', today ? 'text-macaw-dark' : 'text-hare')}>
+                  {today ? 'Hoy' : WEEKDAY.format(new Date(`${d.day}T12:00:00Z`))}
+                </span>
               </div>
-              <span className="text-xs font-extrabold uppercase text-hare">{WEEKDAY.format(new Date(`${d.day}T12:00:00Z`))}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 

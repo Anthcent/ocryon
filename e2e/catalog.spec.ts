@@ -133,7 +133,7 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
     await page.getByRole('button', { name: 'Mover', exact: true }).first().click();
     await page.getByRole('dialog', { name: 'Mover a…' }).getByRole('button', { name: 'Otro libro' }).click();
     await expectToast(page, 'Movido a «Otro libro»');
-    await expect(page.getByRole('link', { name: 'Otro libro' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: 'Otro libro' })).toBeVisible();
     await page.getByRole('button', { name: 'Mover', exact: true }).first().click();
     await page.getByRole('dialog', { name: 'Mover a…' }).getByRole('button', { name: 'Ninguno (individual)' }).click();
     await expectToast(page, 'Ahora es un escaneo individual');

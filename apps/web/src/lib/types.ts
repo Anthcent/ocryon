@@ -71,9 +71,8 @@ export interface SearchResult {
 
 export interface Stats {
   totals: { scans: number; words: number; individual: number; groups: number };
-  streak: number;
   week: { day: string; count: number }[];
-  recentGroups: (Pick<Group, 'id' | 'title' | 'color' | 'updatedAt'> & { scanCount: number })[];
+  recentGroups: (Pick<Group, 'id' | 'title' | 'author' | 'category' | 'color' | 'totalPages' | 'updatedAt'> & { scanCount: number })[];
 }
 
 export interface Analysis<T = unknown> {

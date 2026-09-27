@@ -132,7 +132,7 @@ test.describe('Ajustes', () => {
 });
 
 test.describe('Inicio', () => {
-  test('muestra totales, racha y grupos recientes', async ({ page }) => {
+  test('muestra totales, actividad de la semana, libro en curso y grupos recientes', async ({ page }) => {
     await signUp(page, 'Carmen');
     await createScans(page, {
       newGroup: { title: 'Cuentos' },
@@ -144,13 +144,18 @@ test.describe('Inicio', () => {
     await createScans(page, { items: [{ text: 'seis', engine: 'manual' }] });
     await page.goto('/');
     await expect(page.getByRole('heading', { name: '¡Hola, Carmen!' })).toBeVisible();
-    await expect(page.getByText('1 día de racha')).toBeVisible();
+    await expect(page.getByText('3 hojas escaneadas')).toBeVisible();
+    await expect(page.getByText(/racha/i)).toHaveCount(0);
+    // En escritorio, el menú lateral ofrece seguir con el último libro.
+    if ((page.viewportSize()?.width ?? 0) >= 1024) {
+      await expect(page.getByTestId('continue-card')).toContainText('Cuentos');
+    }
     const tile = (label: string) => page.locator('main .grid > div').filter({ has: page.getByText(label, { exact: true }) }).locator('.text-2xl');
     await expect(tile('Escaneos')).toHaveText('3');
     await expect(tile('Grupos')).toHaveText('1');
     await expect(tile('Individuales')).toHaveText('1');
     await expect(tile('Palabras')).toHaveText('6');
-    await page.getByRole('link', { name: /Cuentos/ }).click();
+    await page.getByRole('main').getByRole('link', { name: /Cuentos/ }).click();
     await expect(page.getByRole('heading', { name: 'Cuentos' })).toBeVisible();
   });
 });

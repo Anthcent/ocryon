@@ -156,7 +156,10 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
     }
     const speed = Math.abs(dx) / Math.max(1, performance.now() - d.t); // px/ms
     const current: Flip = { dir: d.dir, progress: d.progress, target: null, duration: 0 };
-    settle(current, d.progress > 0.35 || speed > 0.6 ? 1 : 0);
+    // Pasa si se arrastró más de un tercio, o con un gesto rápido que ya movió la hoja un poco
+    // (así un roce accidental no cambia de página).
+    const flick = speed > 0.5 && d.progress > 0.15;
+    settle(current, d.progress > 0.35 || flick ? 1 : 0);
   };
 
   useEffect(() => {

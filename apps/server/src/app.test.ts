@@ -8,7 +8,6 @@ import path from 'node:path';
 import { openDatabase } from './db/index.js';
 import { migrations } from './db/migrations.js';
 import { createCipher } from './lib/crypto.js';
-import { computeStreak } from './routes/stats.js';
 import { toFtsQuery } from './routes/search.js';
 
 function setup() {
@@ -203,10 +202,12 @@ describe('utilidades', () => {
     expect(toFtsQuery('  ')).toBe('');
   });
 
-  it('calcula la racha de días', () => {
-    const today = new Date('2026-09-26T12:00:00Z');
-    expect(computeStreak(new Set(['2026-09-26', '2026-09-25', '2026-09-23']), today)).toBe(2);
-    expect(computeStreak(new Set(['2026-09-25', '2026-09-24']), today)).toBe(2);
-    expect(computeStreak(new Set(['2026-09-20']), today)).toBe(0);
+  it('resume la actividad de la semana en la zona horaria del usuario', async () => {
+    const { agent, post } = await registered();
+    await post('/api/scans', { items: [{ text: 'hoy', engine: 'manual' }] });
+    const res = await agent.get('/api/stats').query({ tz: -300 }).expect(200);
+    expect(res.body.week).toHaveLength(7);
+    expect(res.body.week.at(-1).count).toBe(1);
+    expect(res.body).not.toHaveProperty('streak');
   });
 });

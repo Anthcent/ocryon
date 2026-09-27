@@ -177,33 +177,33 @@ function LibraryHero({ onCreate }: { onCreate: () => void }) {
     { label: 'sueltos', value: stats?.totals.individual ?? 0, emoji: '📝' },
     { label: 'palabras', value: formatNumber(stats?.totals.words ?? 0), emoji: '✍️' },
   ];
+  const chips = tiles.map((t) => (
+    <span key={t.label} className="inline-flex items-center gap-1 rounded-xl bg-white/25 px-2 py-0.5 text-xs font-black backdrop-blur sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm">
+      <span aria-hidden>{t.emoji}</span>
+      {t.value}
+      <span className="text-[10px] font-extrabold uppercase text-white/85 sm:text-xs">{t.label}</span>
+    </span>
+  ));
+
   return (
-    <div className="relative mb-6 overflow-hidden rounded-[2rem] border-b-[6px] border-fox-dark bg-gradient-to-br from-fox via-[#ffab2e] to-bee p-5 text-white sm:p-7">
-      <Library className="pointer-events-none absolute -bottom-8 -right-6 size-48 text-white/15" />
-      <div className="relative flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black">Tu biblioteca</h1>
-          <p className="font-bold text-white/90">Tus libros y documentos escaneados, listos para leer.</p>
+    <div className="relative mb-5 overflow-hidden rounded-3xl border-b-[5px] border-fox-dark bg-gradient-to-br from-fox via-[#ffab2e] to-bee px-4 py-3 text-white sm:px-6 sm:py-4">
+      <Library className="pointer-events-none absolute -bottom-6 right-40 size-28 text-white/15" />
+      <div className="relative flex items-center gap-3 sm:gap-5">
+        <div className="min-w-0">
+          <h1 className="text-xl font-black leading-tight sm:text-2xl">Tu biblioteca</h1>
+          <p className="hidden text-sm font-bold text-white/90 sm:block">Tus libros y documentos, listos para leer.</p>
         </div>
+        <div className="hidden flex-wrap gap-2 md:flex">{chips}</div>
         <button
           type="button"
           onClick={onCreate}
-          className="inline-flex items-center gap-2 rounded-2xl border-2 border-b-4 border-white/70 bg-white px-4 py-2.5 text-sm font-extrabold uppercase text-fox-dark transition hover:bg-fox-light active:translate-y-[2px] active:border-b-2"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-2xl border-2 border-b-4 border-macaw-dark bg-macaw px-3 py-2 text-xs font-extrabold uppercase text-white shadow-sm transition hover:brightness-110 active:translate-y-[2px] active:border-b-2 sm:px-4 sm:text-sm"
         >
-          <Plus className="size-5" /> Nuevo grupo
+          <Plus className="size-5" strokeWidth={3} /> Nuevo grupo
         </button>
       </div>
-      <div className="relative mt-5 grid max-w-lg grid-cols-3 gap-2 sm:gap-3">
-        {tiles.map((t) => (
-          <div key={t.label} className="rounded-2xl bg-white/20 px-3 py-2.5 backdrop-blur">
-            <div className="text-2xl font-black leading-none">
-              <span className="mr-1 text-lg">{t.emoji}</span>
-              {t.value}
-            </div>
-            <div className="mt-1 text-xs font-extrabold uppercase text-white/85">{t.label}</div>
-          </div>
-        ))}
-      </div>
+      {/* En pantallas pequeñas el resumen va en una segunda fila */}
+      <div className="relative mt-3 flex flex-wrap gap-1.5 md:hidden">{chips}</div>
     </div>
   );
 }
