@@ -1,4 +1,3 @@
-import type { SQLInputValue } from 'node:sqlite';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
@@ -29,34 +28,32 @@ const TEST_PNG = Buffer.from(
 export function settingsRouter(ctx: AppContext) {
   const router = Router();
 
-  router.get('/', (req, res) => {
-    res.json(publicSettings(ctx, currentUser(req).id));
+  router.get('/', async (req, res) => {
+    res.json(await publicSettings(ctx, currentUser(req).id));
   });
 
-  router.put('/', (req, res) => {
+  router.put('/', async (req, res) => {
     const userId = currentUser(req).id;
     const data = updateSchema.parse(req.body);
-    loadSettingsRow(ctx, userId);
+    await loadSettingsRow(ctx, userId);
 
     const sets: string[] = [];
-    const values: SQLInputValue[] = [];
-    const set = (column: string, value: SQLInputValue) => {
+    const values: unknown[] = [];
+    const set = (column: string, value: unknown) => {
       sets.push(`${column} = ?`);
       values.push(value);
     };
     if (data.defaultEngine) set('default_engine', data.defaultEngine);
     if (data.ocrLanguage) set('ocr_language', data.ocrLanguage);
-    if (data.autoScan !== undefined) set('auto_scan', data.autoScan ? 1 : 0);
+    if (data.autoScan !== undefined) set('auto_scan', data.autoScan);
     if (data.geminiModel) set('gemini_model', data.geminiModel);
     if (data.ocrspaceKey !== undefined) set('ocrspace_key_enc', data.ocrspaceKey ? ctx.cipher.encrypt(data.ocrspaceKey) : null);
     if (data.geminiKey !== undefined) set('gemini_key_enc', data.geminiKey ? ctx.cipher.encrypt(data.geminiKey) : null);
 
     if (sets.length > 0) {
-      ctx.db
-        .prepare(`UPDATE settings SET ${sets.join(', ')}, updated_at = datetime('now') WHERE user_id = ?`)
-        .run(...values, userId);
+      await ctx.db.run(`UPDATE settings SET ${sets.join(', ')}, updated_at = now() WHERE user_id = ?`, [...values, userId]);
     }
-    res.json(publicSettings(ctx, userId));
+    res.json(await publicSettings(ctx, userId));
   });
 
   router.post('/test/:provider', async (req, res) => {
@@ -64,16 +61,16 @@ export function settingsRouter(ctx: AppContext) {
     const provider = z.enum(['ocrspace', 'gemini']).parse(req.params.provider);
     const started = Date.now();
     if (provider === 'ocrspace') {
-      const row = loadSettingsRow(ctx, userId);
-      await ocrSpaceRecognize(TEST_PNG, 'image/png', getApiKey(ctx, userId, 'ocrspace'), row.ocr_language).catch((err) => {
+      const row = await loadSettingsRow(ctx, userId);
+      await ocrSpaceRecognize(TEST_PNG, 'image/png', await getApiKey(ctx, userId, 'ocrspace'), row.ocr_language).catch((err) => {
         // Una imagen sin texto puede dar error de procesamiento, pero eso prueba que la clave es válida.
         if (err?.code === 'provider_error' && err.status === 422) return '';
         throw err;
       });
     } else {
-      const row = loadSettingsRow(ctx, userId);
+      const row = await loadSettingsRow(ctx, userId);
       await geminiGenerate({
-        apiKey: getApiKey(ctx, userId, 'gemini'),
+        apiKey: await getApiKey(ctx, userId, 'gemini'),
         model: row.gemini_model,
         parts: [{ text: 'Responde solo: ok' }],
         timeoutMs: 30_000,

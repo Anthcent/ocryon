@@ -1,17 +1,26 @@
-import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { createApp } from './app.js';
-import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDatabase } from './db/index.js';
+import request from 'supertest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createApp } from './app.js';
+import { openDatabase, toPositional, type Database } from './db/index.js';
 import { migrations } from './db/migrations.js';
 import { createCipher } from './lib/crypto.js';
-import { toFtsQuery } from './routes/search.js';
+import { buildSnippet, searchTerms } from './lib/snippet.js';
+import { toTsQuery } from './routes/search.js';
+
+// Un único PostgreSQL embebido (PGlite) para todo el archivo: arrancarlo cuesta unos segundos.
+let db: Database;
+beforeAll(async () => {
+  db = await openDatabase({});
+}, 60_000);
+afterAll(() => db?.close());
+beforeEach(async () => {
+  await db.run('TRUNCATE users, groups, scans, analyses, doc_templates, documents, settings RESTART IDENTITY CASCADE');
+});
 
 function setup() {
-  const db = openDatabase(':memory:');
   const app = createApp({
     db,
     cipher: createCipher('test-secret-key-123456'),
@@ -67,8 +76,8 @@ describe('ajustes', () => {
     expect(res.body.keys.ocrspace).toEqual({ configured: true, source: 'user', masked: '••••ABCD' });
     expect(res.body.defaultEngine).toBe('gemini');
     expect(JSON.stringify(res.body)).not.toContain('K81234567890ABCD');
-    const row = db.prepare('SELECT ocrspace_key_enc FROM settings').get() as { ocrspace_key_enc: string };
-    expect(row.ocrspace_key_enc).not.toContain('K81234567890ABCD');
+    const row = await db.one<{ ocrspace_key_enc: string }>('SELECT ocrspace_key_enc FROM settings');
+    expect(row!.ocrspace_key_enc).not.toContain('K81234567890ABCD');
   });
 
   it('pide configurar la clave antes de usar OCR', async () => {
@@ -149,7 +158,7 @@ describe('escaneos, grupos y búsqueda', () => {
     const list = await agent.get('/api/analyses').query({ targetType: 'scan', targetId: id }).expect(200);
     expect(list.body.analyses[0].content).toEqual({ palabras: 5 });
     await agent.delete(`/api/scans/${id}`).set('X-Requested-With', 'ocryon').expect(204);
-    expect(db.prepare('SELECT COUNT(*) AS n FROM analyses').get()).toEqual({ n: 0 });
+    expect(await db.one('SELECT COUNT(*) AS n FROM analyses')).toEqual({ n: 0 });
   });
 });
 
@@ -180,19 +189,39 @@ describe('grupos con más datos y búsqueda filtrada', () => {
     expect(hist.body.results.map((r: any) => r.groupTitle)).toEqual(['Libro A']);
   });
 
-  it('migra una base de datos de la versión 1 sin perder datos', () => {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ocryon-')), 'v1.db');
-    const old = new DatabaseSync(file);
-    old.exec(migrations[0]);
-    old.exec('PRAGMA user_version = 1');
-    old.exec(`INSERT INTO users (email, name, password_hash) VALUES ('a@b.co', 'A', 'x')`);
-    old.exec(`INSERT INTO groups (user_id, title) VALUES (1, 'Viejo')`);
-    old.close();
-    const db = openDatabase(file);
-    expect(db.prepare('SELECT title, author, category, total_pages AS totalPages FROM groups').get()).toEqual({
-      title: 'Viejo', author: '', category: '', totalPages: null,
-    });
-    db.close();
+  it('aplica las migraciones una sola vez y conserva los datos al reabrir', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ocryon-pg-'));
+    const first = await openDatabase({ dataDir });
+    await first.run(`INSERT INTO users (email, name, password_hash) VALUES ('a@b.co', 'A', 'x')`);
+    await first.close();
+    const again = await openDatabase({ dataDir });
+    expect(await again.one('SELECT COUNT(*) AS n FROM schema_migrations')).toEqual({ n: migrations.length });
+    expect(await again.one('SELECT email FROM users')).toEqual({ email: 'a@b.co' });
+    await again.close();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }, 60_000);
+
+  it('reordena las páginas de un grupo', async () => {
+    const { agent, post } = await registered();
+    const saved = await post('/api/scans', {
+      newGroup: { title: 'Orden' },
+      items: ['uno', 'dos', 'tres'].map((text) => ({ text, engine: 'manual' })),
+    }).expect(201);
+    const [a, b, c] = saved.body.ids;
+    await agent.put(`/api/groups/${saved.body.groupId}/order`).set('X-Requested-With', 'ocryon').send({ scanIds: [c, a, b] }).expect(204);
+    const { body } = await agent.get(`/api/groups/${saved.body.groupId}`).expect(200);
+    expect(body.scans.map((s: any) => s.text)).toEqual(['tres', 'uno', 'dos']);
+  });
+
+  it('busca sin acentos en ambos sentidos y por prefijo, y devuelve fechas ISO', async () => {
+    const { agent, post } = await registered();
+    await post('/api/scans', { items: [{ text: 'Y vio treinta o cuarenta molinos de viento en la Mancha, dijo García Márquez', engine: 'manual' }] });
+    const accented = await agent.get('/api/search').query({ q: 'MÁRQUEZ' }).expect(200);
+    expect(accented.body.total).toBe(1);
+    const prefix = await agent.get('/api/search').query({ q: 'garcia marq' }).expect(200);
+    expect(prefix.body.results[0].snippet).toContain('\u0002García\u0003 \u0002Márquez\u0003');
+    expect(prefix.body.results[0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+    expect((await agent.get('/api/search').query({ q: 'molinos de nieve' })).body.total).toBe(0);
   });
 });
 
@@ -223,6 +252,11 @@ describe('documentos', () => {
     expect((await agent.get('/api/documents').query({ template: 'recibo' })).body.documents).toHaveLength(1);
     expect((await agent.get('/api/documents').query({ q: 'F001' })).body.documents).toHaveLength(2);
     expect((await agent.get('/api/documents').query({ q: 'luz' })).body.documents).toHaveLength(1);
+    // Sin acentos ni mayúsculas, y con comodines de LIKE tratados como texto.
+    await post('/api/documents', { ...invoice, title: 'Factura de María Pérez' }).expect(201);
+    expect((await agent.get('/api/documents').query({ q: 'maria PEREZ' })).body.documents).toHaveLength(1);
+    expect((await agent.get('/api/documents').query({ q: '100%' })).body.documents).toHaveLength(0);
+    await agent.delete(`/api/documents/${(await agent.get('/api/documents').query({ q: 'maria' })).body.documents[0].id}`).set('X-Requested-With', 'ocryon').expect(204);
 
     const fields = [...invoice.fields];
     fields[1] = { ...fields[1], value: '120.00' };
@@ -260,9 +294,19 @@ describe('documentos', () => {
 });
 
 describe('utilidades', () => {
-  it('construye consultas FTS seguras', () => {
-    expect(toFtsQuery('hola "mundo" OR x*')).toBe('"hola" "mundo" "OR" "x"*');
-    expect(toFtsQuery('  ')).toBe('');
+  it('construye consultas de texto completo seguras', () => {
+    expect(toTsQuery(searchTerms('hola "mundo" | !x* & Ñandú'))).toBe('hola & mundo & x & nandu:*');
+    expect(searchTerms('  ')).toEqual([]);
+    expect(toPositional('a = ? AND b IN (?, ?)')).toBe('a = $1 AND b IN ($2, $3)');
+  });
+
+  it('recorta el fragmento alrededor de la coincidencia', () => {
+    const text = `${'palabra '.repeat(40)}el Ingenioso hidalgo ${'final '.repeat(40)}`;
+    const snippet = buildSnippet(text, ['ingenioso']);
+    expect(snippet.startsWith('…')).toBe(true);
+    expect(snippet.endsWith('…')).toBe(true);
+    expect(snippet).toContain('\u0002Ingenioso\u0003 hidalgo');
+    expect(snippet.split(' ').length).toBeLessThanOrEqual(23);
   });
 
   it('resume la actividad de la semana en la zona horaria del usuario', async () => {

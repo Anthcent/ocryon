@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
+import type { Queryable } from '../db/index.js';
 import { HttpError, notFound } from '../lib/http-error.js';
 import { countWords } from '../lib/text.js';
 import { currentUser } from '../middleware/auth.js';
@@ -41,130 +42,135 @@ const listSchema = z.object({
 
 const idParam = z.coerce.number().int().positive();
 
-const SCAN_COLUMNS = `s.id, s.group_id AS groupId, s.title, s.text, s.engine, s.language, s.position,
-  s.word_count AS wordCount, s.page_label AS pageLabel, s.created_at AS createdAt, s.updated_at AS updatedAt`;
+const SCAN_COLUMNS = `s.id, s.group_id AS "groupId", s.title, s.text, s.engine, s.language, s.position,
+  s.word_count AS "wordCount", s.page_label AS "pageLabel", s.created_at AS "createdAt", s.updated_at AS "updatedAt"`;
+
+interface ScanRow {
+  id: number;
+  groupId: number | null;
+  title: string;
+  text: string;
+  position: number;
+  pageLabel: string;
+}
 
 export function scansRouter(ctx: AppContext) {
   const router = Router();
 
-  const assertGroup = (userId: number, groupId: number) => {
-    const ok = ctx.db.prepare('SELECT 1 FROM groups WHERE id = ? AND user_id = ?').get(groupId, userId);
-    if (!ok) throw notFound('Grupo');
+  const assertGroup = async (db: Queryable, userId: number, groupId: number) => {
+    if (!(await db.one('SELECT 1 FROM groups WHERE id = ? AND user_id = ?', [groupId, userId]))) throw notFound('Grupo');
   };
 
-  const findScan = (userId: number, id: number) => {
-    const scan = ctx.db
-      .prepare(
-        `SELECT ${SCAN_COLUMNS}, g.title AS groupTitle, g.color AS groupColor
-           FROM scans s LEFT JOIN groups g ON g.id = s.group_id
-          WHERE s.id = ? AND s.user_id = ?`,
-      )
-      .get(id, userId);
+  const nextPosition = async (db: Queryable, groupId: number) =>
+    (await db.one<{ next: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM scans WHERE group_id = ?', [groupId]))!.next;
+
+  const findScan = async (userId: number, id: number) => {
+    const scan = await ctx.db.one<ScanRow>(
+      `SELECT ${SCAN_COLUMNS}, g.title AS "groupTitle", g.color AS "groupColor"
+         FROM scans s LEFT JOIN groups g ON g.id = s.group_id
+        WHERE s.id = ? AND s.user_id = ?`,
+      [id, userId],
+    );
     if (!scan) throw notFound('Escaneo');
-    return scan as Record<string, unknown>;
+    return scan;
   };
 
-  router.get('/', (req, res) => {
+  router.get('/', async (req, res) => {
     const userId = currentUser(req).id;
     const q = listSchema.parse(req.query);
     const where = q.scope === 'individual' ? 'AND s.group_id IS NULL' : '';
-    const scans = ctx.db
-      .prepare(
-        `SELECT ${SCAN_COLUMNS}, g.title AS groupTitle, g.color AS groupColor
-           FROM scans s LEFT JOIN groups g ON g.id = s.group_id
-          WHERE s.user_id = ? ${where}
-          ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
-      )
-      .all(userId, q.limit, q.offset);
-    const { total } = ctx.db
-      .prepare(`SELECT COUNT(*) AS total FROM scans s WHERE s.user_id = ? ${where}`)
-      .get(userId) as { total: number };
+    const scans = await ctx.db.query(
+      `SELECT ${SCAN_COLUMNS}, g.title AS "groupTitle", g.color AS "groupColor"
+         FROM scans s LEFT JOIN groups g ON g.id = s.group_id
+        WHERE s.user_id = ? ${where}
+        ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
+      [userId, q.limit, q.offset],
+    );
+    const { total } = (await ctx.db.one<{ total: number }>(`SELECT COUNT(*) AS total FROM scans s WHERE s.user_id = ? ${where}`, [userId]))!;
     res.json({ scans, total });
   });
 
   /** Guarda uno o varios escaneos, individuales o dentro de un grupo (existente o nuevo). */
-  router.post('/', (req, res) => {
+  router.post('/', async (req, res) => {
     const userId = currentUser(req).id;
     const data = createSchema.parse(req.body);
 
-    const result = ctx.db.transaction(() => {
+    const result = await ctx.db.transaction(async (tx) => {
       let groupId: number | null = null;
       if (data.newGroup) {
         const g = data.newGroup;
-        groupId = Number(
-          ctx.db
-            .prepare('INSERT INTO groups (user_id, title, description, author, category, color, total_pages) VALUES (?, ?, ?, ?, ?, ?, ?)')
-            .run(userId, g.title, g.description, g.author, g.category, g.color, g.totalPages).lastInsertRowid,
-        );
+        groupId = (await tx.one<{ id: number }>(
+          'INSERT INTO groups (user_id, title, description, author, category, color, total_pages) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+          [userId, g.title, g.description, g.author, g.category, g.color, g.totalPages],
+        ))!.id;
       } else if (data.groupId) {
-        assertGroup(userId, data.groupId);
+        await assertGroup(tx, userId, data.groupId);
         groupId = data.groupId;
       }
 
       let position = 0;
       if (groupId) {
-        const row = ctx.db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM scans WHERE group_id = ?').get(groupId) as { next: number };
-        position = row.next;
-        ctx.db.prepare(`UPDATE groups SET updated_at = datetime('now') WHERE id = ?`).run(groupId);
+        // Bloquea el grupo: dos guardados simultáneos no pueden repetir posiciones.
+        await tx.run('SELECT 1 FROM groups WHERE id = ? FOR UPDATE', [groupId]);
+        position = await nextPosition(tx, groupId);
+        await tx.run('UPDATE groups SET updated_at = now() WHERE id = ?', [groupId]);
       }
 
-      const insert = ctx.db.prepare(
-        `INSERT INTO scans (user_id, group_id, position, title, text, engine, language, word_count, page_label)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      );
-      const ids = data.items.map((item, i) => {
+      const ids: number[] = [];
+      for (const [i, item] of data.items.entries()) {
         const title = item.title || (groupId ? `Página ${position + i + 1}` : defaultTitle(item.text));
-        return Number(
-          insert.run(userId, groupId, position + i, title, item.text, item.engine, item.language, countWords(item.text), item.pageLabel)
-            .lastInsertRowid,
+        const row = await tx.one<{ id: number }>(
+          `INSERT INTO scans (user_id, group_id, position, title, text, engine, language, word_count, page_label)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+          [userId, groupId, position + i, title, item.text, item.engine, item.language, countWords(item.text), item.pageLabel],
         );
-      });
+        ids.push(row!.id);
+      }
       return { groupId, ids };
-    })();
+    });
 
     res.status(201).json(result);
   });
 
-  router.get('/:id', (req, res) => {
-    res.json({ scan: findScan(currentUser(req).id, idParam.parse(req.params.id)) });
+  router.get('/:id', async (req, res) => {
+    res.json({ scan: await findScan(currentUser(req).id, idParam.parse(req.params.id)) });
   });
 
-  router.patch('/:id', (req, res) => {
+  router.patch('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    const current = findScan(userId, id);
+    const current = await findScan(userId, id);
     const data = updateSchema.parse(req.body);
 
-    let groupId = current.groupId as number | null;
-    let position = current.position as number;
+    let groupId = current.groupId;
+    let position = current.position;
     if (data.groupId !== undefined && data.groupId !== groupId) {
       if (data.groupId !== null) {
-        assertGroup(userId, data.groupId);
-        position = (ctx.db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM scans WHERE group_id = ?').get(data.groupId) as { next: number }).next;
+        await assertGroup(ctx.db, userId, data.groupId);
+        position = await nextPosition(ctx.db, data.groupId);
       }
       groupId = data.groupId;
     }
-    const text = data.text ?? (current.text as string);
-    const title = data.title ?? (current.title as string);
+    const text = data.text ?? current.text;
+    const title = data.title ?? current.title;
     if (!title && !text) throw new HttpError(400, 'El escaneo no puede quedar vacío', 'validation');
 
-    ctx.db
-      .prepare(
-        `UPDATE scans SET title = ?, text = ?, group_id = ?, position = ?, word_count = ?, page_label = ?, updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-      )
-      .run(title, text, groupId, position, countWords(text), data.pageLabel ?? (current.pageLabel as string), id, userId);
-    res.json({ scan: findScan(userId, id) });
+    await ctx.db.run(
+      `UPDATE scans SET title = ?, text = ?, group_id = ?, position = ?, word_count = ?, page_label = ?, updated_at = now()
+        WHERE id = ? AND user_id = ?`,
+      [title, text, groupId, position, countWords(text), data.pageLabel ?? current.pageLabel, id, userId],
+    );
+    res.json({ scan: await findScan(userId, id) });
   });
 
-  router.delete('/:id', (req, res) => {
+  router.delete('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    findScan(userId, id);
-    ctx.db.transaction(() => {
-      ctx.db.prepare(`DELETE FROM analyses WHERE user_id = ? AND target_type = 'scan' AND target_id = ?`).run(userId, id);
-      ctx.db.prepare('DELETE FROM scans WHERE id = ? AND user_id = ?').run(id, userId);
-    })();
+    await findScan(userId, id);
+    await ctx.db.transaction(async (tx) => {
+      await tx.run(`DELETE FROM analyses WHERE user_id = ? AND target_type = 'scan' AND target_id = ?`, [userId, id]);
+      await tx.run('DELETE FROM scans WHERE id = ? AND user_id = ?', [id, userId]);
+    });
     res.status(204).end();
   });
 

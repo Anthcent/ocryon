@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # Ocryon: API (Express) + frontend compilado (React) servidos por el mismo proceso Node
-# en 0.0.0.0:8080. Las migraciones de la base de datos se aplican al arrancar, antes de
-# aceptar tráfico. Ningún secreto se incluye en la imagen: se configuran en tiempo de ejecución.
+# en 0.0.0.0:8080. Con DATABASE_URL usa PostgreSQL y aplica las migraciones pendientes al
+# arrancar, antes de aceptar tráfico. Ningún secreto se incluye en la imagen: se configuran en tiempo de ejecución.
 
 ARG NODE_IMAGE=node:24.21.0-alpine3.24
 
@@ -31,7 +31,7 @@ FROM ${NODE_IMAGE}
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8080 \
-    DATABASE_PATH=/data/ocryon.db \
+    DATA_DIR=/data/pglite \
     WEB_DIST=/app/apps/web/dist
 WORKDIR /app/apps/server
 
@@ -39,7 +39,7 @@ COPY --from=deps --chown=node:node /app/node_modules /app/node_modules
 COPY --from=build --chown=node:node /app/apps/server/package.json ./package.json
 COPY --from=build --chown=node:node /app/apps/server/dist ./dist
 COPY --from=build --chown=node:node /app/apps/web/dist /app/apps/web/dist
-# Carpeta de datos (SQLite). Montar aquí un volumen persistente para conservar los datos entre despliegues.
+# Solo se usa si no hay DATABASE_URL (PostgreSQL embebido, sin persistencia salvo que se monte un volumen en /data).
 RUN mkdir -p /data && chown node:node /data
 
 USER node

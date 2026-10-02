@@ -37,8 +37,8 @@ const updateSchema = z.object({
 
 const idParam = z.coerce.number().int().positive();
 
-export const GROUP_COLUMNS = `g.id, g.title, g.description, g.author, g.category, g.color, g.total_pages AS totalPages,
-  g.created_at AS createdAt, g.updated_at AS updatedAt`;
+export const GROUP_COLUMNS = `g.id, g.title, g.description, g.author, g.category, g.color, g.total_pages AS "totalPages",
+  g.created_at AS "createdAt", g.updated_at AS "updatedAt"`;
 
 interface GroupRow {
   id: number;
@@ -55,96 +55,101 @@ interface GroupRow {
 export function groupsRouter(ctx: AppContext) {
   const router = Router();
 
-  const findGroup = (userId: number, id: number) => {
-    const group = ctx.db.prepare(`SELECT ${GROUP_COLUMNS} FROM groups g WHERE g.id = ? AND g.user_id = ?`).get(id, userId);
+  const findGroup = async (userId: number, id: number) => {
+    const group = await ctx.db.one<GroupRow>(`SELECT ${GROUP_COLUMNS} FROM groups g WHERE g.id = ? AND g.user_id = ?`, [id, userId]);
     if (!group) throw notFound('Grupo');
-    return group as unknown as GroupRow;
+    return group;
   };
 
-  router.get('/', (req, res) => {
+  router.get('/', async (req, res) => {
     const userId = currentUser(req).id;
-    const groups = ctx.db
-      .prepare(
-        `SELECT ${GROUP_COLUMNS}, COUNT(s.id) AS scanCount, COALESCE(SUM(s.word_count), 0) AS wordCount
-           FROM groups g LEFT JOIN scans s ON s.group_id = g.id
-          WHERE g.user_id = ?
-          GROUP BY g.id
-          ORDER BY g.updated_at DESC`,
-      )
-      .all(userId);
+    const groups = await ctx.db.query(
+      `SELECT ${GROUP_COLUMNS}, COUNT(s.id) AS "scanCount", COALESCE(SUM(s.word_count), 0) AS "wordCount"
+         FROM groups g LEFT JOIN scans s ON s.group_id = g.id
+        WHERE g.user_id = ?
+        GROUP BY g.id
+        ORDER BY g.updated_at DESC, g.id DESC`,
+      [userId],
+    );
     res.json({ groups });
   });
 
   /** Categorías usadas por el usuario, para sugerirlas y filtrar. */
-  router.get('/categories', (req, res) => {
+  router.get('/categories', async (req, res) => {
     const userId = currentUser(req).id;
-    const rows = ctx.db
-      .prepare(`SELECT category, COUNT(*) AS count FROM groups WHERE user_id = ? AND category <> '' GROUP BY category ORDER BY count DESC, category`)
-      .all(userId);
-    res.json({ categories: rows });
+    const categories = await ctx.db.query(
+      `SELECT category, COUNT(*) AS count FROM groups WHERE user_id = ? AND category <> '' GROUP BY category ORDER BY count DESC, category`,
+      [userId],
+    );
+    res.json({ categories });
   });
 
-  router.post('/', (req, res) => {
+  router.post('/', async (req, res) => {
     const userId = currentUser(req).id;
     const data = groupSchema.parse(req.body);
-    const result = ctx.db
-      .prepare('INSERT INTO groups (user_id, title, description, author, category, color, total_pages) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(userId, data.title, data.description, data.author, data.category, data.color, data.totalPages);
-    res.status(201).json({ group: findGroup(userId, Number(result.lastInsertRowid)) });
+    const { id } = (await ctx.db.one<{ id: number }>(
+      'INSERT INTO groups (user_id, title, description, author, category, color, total_pages) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+      [userId, data.title, data.description, data.author, data.category, data.color, data.totalPages],
+    ))!;
+    res.status(201).json({ group: await findGroup(userId, id) });
   });
 
-  router.get('/:id', (req, res) => {
+  router.get('/:id', async (req, res) => {
     const userId = currentUser(req).id;
-    const group = findGroup(userId, idParam.parse(req.params.id));
-    const scans = ctx.db
-      .prepare(
-        `SELECT id, title, text, engine, language, position, word_count AS wordCount, page_label AS pageLabel,
-                created_at AS createdAt, updated_at AS updatedAt
-           FROM scans WHERE group_id = ? AND user_id = ? ORDER BY position, id`,
-      )
-      .all(group.id, userId);
+    const group = await findGroup(userId, idParam.parse(req.params.id));
+    const scans = await ctx.db.query(
+      `SELECT id, title, text, engine, language, position, word_count AS "wordCount", page_label AS "pageLabel",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM scans WHERE group_id = ? AND user_id = ? ORDER BY position, id`,
+      [group.id, userId],
+    );
     res.json({ group, scans });
   });
 
-  router.patch('/:id', (req, res) => {
+  router.patch('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
     const data = updateSchema.parse(req.body);
-    const current = findGroup(userId, id);
+    const current = await findGroup(userId, id);
     const merged = { ...current, ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)) } as GroupRow;
-    ctx.db
-      .prepare(
-        `UPDATE groups SET title = ?, description = ?, author = ?, category = ?, color = ?, total_pages = ?, updated_at = datetime('now')
-          WHERE id = ?`,
-      )
-      .run(merged.title, merged.description, merged.author, merged.category, merged.color, merged.totalPages, id);
-    res.json({ group: findGroup(userId, id) });
+    await ctx.db.run(
+      `UPDATE groups SET title = ?, description = ?, author = ?, category = ?, color = ?, total_pages = ?, updated_at = now()
+        WHERE id = ?`,
+      [merged.title, merged.description, merged.author, merged.category, merged.color, merged.totalPages, id],
+    );
+    res.json({ group: await findGroup(userId, id) });
   });
 
-  router.put('/:id/order', (req, res) => {
+  router.put('/:id/order', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    findGroup(userId, id);
+    await findGroup(userId, id);
     const { scanIds } = z.object({ scanIds: z.array(z.number().int().positive()).max(5000) }).parse(req.body);
-    const update = ctx.db.prepare('UPDATE scans SET position = ? WHERE id = ? AND group_id = ? AND user_id = ?');
-    ctx.db.transaction(() => {
-      scanIds.forEach((scanId, index) => update.run(index, scanId, id, userId));
-      ctx.db.prepare(`UPDATE groups SET updated_at = datetime('now') WHERE id = ?`).run(id);
-    })();
+    await ctx.db.transaction(async (tx) => {
+      // Una sola sentencia: la posición de cada escaneo es su índice en la lista.
+      await tx.run(
+        `UPDATE scans s SET position = o.idx - 1
+           FROM unnest(?::int[]) WITH ORDINALITY AS o(scan_id, idx)
+          WHERE s.id = o.scan_id AND s.group_id = ? AND s.user_id = ?`,
+        [scanIds, id, userId],
+      );
+      await tx.run('UPDATE groups SET updated_at = now() WHERE id = ?', [id]);
+    });
     res.status(204).end();
   });
 
-  router.delete('/:id', (req, res) => {
+  router.delete('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    findGroup(userId, id);
-    ctx.db.transaction(() => {
-      ctx.db.prepare(`DELETE FROM analyses WHERE user_id = ? AND target_type = 'group' AND target_id = ?`).run(userId, id);
-      ctx.db
-        .prepare(`DELETE FROM analyses WHERE user_id = ? AND target_type = 'scan' AND target_id IN (SELECT id FROM scans WHERE group_id = ?)`)
-        .run(userId, id);
-      ctx.db.prepare('DELETE FROM groups WHERE id = ? AND user_id = ?').run(id, userId);
-    })();
+    await findGroup(userId, id);
+    await ctx.db.transaction(async (tx) => {
+      await tx.run(`DELETE FROM analyses WHERE user_id = ? AND target_type = 'group' AND target_id = ?`, [userId, id]);
+      await tx.run(
+        `DELETE FROM analyses WHERE user_id = ? AND target_type = 'scan' AND target_id IN (SELECT id FROM scans WHERE group_id = ?)`,
+        [userId, id],
+      );
+      await tx.run('DELETE FROM groups WHERE id = ? AND user_id = ?', [id, userId]);
+    });
     res.status(204).end();
   });
 

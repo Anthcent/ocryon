@@ -41,17 +41,17 @@ export function ocrRouter(ctx: AppContext) {
     const userId = currentUser(req).id;
     if (!req.file) throw new HttpError(400, 'Falta la imagen', 'upload');
     const { engine, language: requested } = bodySchema.parse(req.body);
-    const settings = loadSettingsRow(ctx, userId);
+    const settings = await loadSettingsRow(ctx, userId);
     const language = requested ?? settings.ocr_language;
     const started = Date.now();
 
     const text =
       engine === 'ocrspace'
-        ? await ocrSpaceRecognize(req.file.buffer, req.file.mimetype, getApiKey(ctx, userId, 'ocrspace'), language)
+        ? await ocrSpaceRecognize(req.file.buffer, req.file.mimetype, await getApiKey(ctx, userId, 'ocrspace'), language)
         : await geminiRecognize(
             req.file.buffer,
             req.file.mimetype,
-            getApiKey(ctx, userId, 'gemini'),
+            await getApiKey(ctx, userId, 'gemini'),
             settings.gemini_model,
             language,
           );

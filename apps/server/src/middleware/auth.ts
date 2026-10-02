@@ -24,19 +24,23 @@ export function signSession(ctx: AppContext, user: SessionUser, days: number) {
 }
 
 export function requireAuth(ctx: AppContext) {
-  const findUser = ctx.db.prepare('SELECT id, email, name FROM users WHERE id = ?');
-
-  return (req: Request, _res: Response, next: NextFunction) => {
+  return async (req: Request, _res: Response, next: NextFunction) => {
     const token = req.cookies?.[SESSION_COOKIE];
     if (!token) return next(new HttpError(401, 'Inicia sesión para continuar', 'unauthenticated'));
+    let userId: number;
     try {
-      const payload = jwt.verify(token, ctx.jwtSecret) as jwt.JwtPayload;
-      const user = findUser.get(Number(payload.sub)) as SessionUser | undefined;
-      if (!user) throw new Error('usuario eliminado');
+      userId = Number((jwt.verify(token, ctx.jwtSecret) as jwt.JwtPayload).sub);
+    } catch {
+      return next(new HttpError(401, 'Tu sesión expiró, vuelve a iniciar sesión', 'unauthenticated'));
+    }
+    try {
+      const user = await ctx.db.one<SessionUser>('SELECT id, email, name FROM users WHERE id = ?', [userId]);
+      if (!user) return next(new HttpError(401, 'Tu sesión expiró, vuelve a iniciar sesión', 'unauthenticated'));
       req.user = user;
       next();
-    } catch {
-      next(new HttpError(401, 'Tu sesión expiró, vuelve a iniciar sesión', 'unauthenticated'));
+    } catch (err) {
+      // Un fallo de la base de datos no es un problema de sesión: que lo gestione el manejador de errores.
+      next(err);
     }
   };
 }

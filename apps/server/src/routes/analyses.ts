@@ -20,58 +20,52 @@ const offlineSchema = targetSchema.extend({
 export function analysesRouter(ctx: AppContext) {
   const router = Router();
 
+  const ANALYSIS_COLUMNS = `id, target_type AS "targetType", target_id AS "targetId", mode, content, created_at AS "createdAt"`;
+  const parse = (row: { content: string }) => ({ ...row, content: JSON.parse(row.content) });
+
   /** Devuelve el texto completo y el título del grupo o escaneo, verificando que sea del usuario. */
-  const loadTarget = (userId: number, targetType: 'group' | 'scan', targetId: number) => {
+  const loadTarget = async (userId: number, targetType: 'group' | 'scan', targetId: number) => {
     if (targetType === 'scan') {
-      const scan = ctx.db.prepare('SELECT title, text FROM scans WHERE id = ? AND user_id = ?').get(targetId, userId) as
-        | { title: string; text: string }
-        | undefined;
+      const scan = await ctx.db.one<{ title: string; text: string }>('SELECT title, text FROM scans WHERE id = ? AND user_id = ?', [targetId, userId]);
       if (!scan) throw notFound('Escaneo');
       return scan;
     }
-    const group = ctx.db.prepare('SELECT title FROM groups WHERE id = ? AND user_id = ?').get(targetId, userId) as
-      | { title: string }
-      | undefined;
+    const group = await ctx.db.one<{ title: string }>('SELECT title FROM groups WHERE id = ? AND user_id = ?', [targetId, userId]);
     if (!group) throw notFound('Grupo');
-    const pages = ctx.db.prepare('SELECT text FROM scans WHERE group_id = ? ORDER BY position, id').all(targetId) as { text: string }[];
+    const pages = await ctx.db.query<{ text: string }>('SELECT text FROM scans WHERE group_id = ? ORDER BY position, id', [targetId]);
     return { title: group.title, text: pages.map((p) => p.text).join('\n\n') };
   };
 
-  const insert = (userId: number, targetType: string, targetId: number, mode: string, content: unknown) => {
-    const id = Number(
-      ctx.db
-        .prepare('INSERT INTO analyses (user_id, target_type, target_id, mode, content) VALUES (?, ?, ?, ?, ?)')
-        .run(userId, targetType, targetId, mode, JSON.stringify(content)).lastInsertRowid,
-    );
-    return getOne(userId, id);
-  };
-
-  const getOne = (userId: number, id: number) => {
-    const row = ctx.db
-      .prepare('SELECT id, target_type AS targetType, target_id AS targetId, mode, content, created_at AS createdAt FROM analyses WHERE id = ? AND user_id = ?')
-      .get(id, userId) as { content: string } | undefined;
+  const getOne = async (userId: number, id: number) => {
+    const row = await ctx.db.one<{ content: string }>(`SELECT ${ANALYSIS_COLUMNS} FROM analyses WHERE id = ? AND user_id = ?`, [id, userId]);
     if (!row) throw notFound('Análisis');
-    return { ...row, content: JSON.parse(row.content) };
+    return parse(row);
   };
 
-  router.get('/', (req, res) => {
+  const insert = async (userId: number, targetType: string, targetId: number, mode: string, content: unknown) => {
+    const row = await ctx.db.one<{ content: string }>(
+      `INSERT INTO analyses (user_id, target_type, target_id, mode, content) VALUES (?, ?, ?, ?, ?) RETURNING ${ANALYSIS_COLUMNS}`,
+      [userId, targetType, targetId, mode, JSON.stringify(content)],
+    );
+    return parse(row!);
+  };
+
+  router.get('/', async (req, res) => {
     const userId = currentUser(req).id;
     const { targetType, targetId } = targetSchema.parse(req.query);
-    const rows = ctx.db
-      .prepare(
-        `SELECT id, target_type AS targetType, target_id AS targetId, mode, content, created_at AS createdAt
-           FROM analyses WHERE user_id = ? AND target_type = ? AND target_id = ?
-          ORDER BY created_at DESC, id DESC LIMIT 20`,
-      )
-      .all(userId, targetType, targetId) as { content: string }[];
-    res.json({ analyses: rows.map((r) => ({ ...r, content: JSON.parse(r.content) })) });
+    const rows = await ctx.db.query<{ content: string }>(
+      `SELECT ${ANALYSIS_COLUMNS} FROM analyses WHERE user_id = ? AND target_type = ? AND target_id = ?
+        ORDER BY created_at DESC, id DESC LIMIT 20`,
+      [userId, targetType, targetId],
+    );
+    res.json({ analyses: rows.map(parse) });
   });
 
-  router.post('/offline', (req, res) => {
+  router.post('/offline', async (req, res) => {
     const userId = currentUser(req).id;
     const data = offlineSchema.parse(req.body);
-    loadTarget(userId, data.targetType, data.targetId);
-    res.status(201).json({ analysis: insert(userId, data.targetType, data.targetId, 'offline', data.content) });
+    await loadTarget(userId, data.targetType, data.targetId);
+    res.status(201).json({ analysis: await insert(userId, data.targetType, data.targetId, 'offline', data.content) });
   });
 
   router.post(
@@ -85,19 +79,19 @@ export function analysesRouter(ctx: AppContext) {
     async (req, res) => {
       const userId = currentUser(req).id;
       const { targetType, targetId } = targetSchema.parse(req.body);
-      const target = loadTarget(userId, targetType, targetId);
+      const target = await loadTarget(userId, targetType, targetId);
       if (target.text.trim().length < 20) throw new HttpError(400, 'No hay suficiente texto para analizar', 'validation');
-      const settings = loadSettingsRow(ctx, userId);
-      const content = await analyzeWithGemini(target.text, target.title, getApiKey(ctx, userId, 'gemini'), settings.gemini_model);
-      res.status(201).json({ analysis: insert(userId, targetType, targetId, 'online', content) });
+      const settings = await loadSettingsRow(ctx, userId);
+      const content = await analyzeWithGemini(target.text, target.title, await getApiKey(ctx, userId, 'gemini'), settings.gemini_model);
+      res.status(201).json({ analysis: await insert(userId, targetType, targetId, 'online', content) });
     },
   );
 
-  router.delete('/:id', (req, res) => {
+  router.delete('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = z.coerce.number().int().positive().parse(req.params.id);
-    getOne(userId, id);
-    ctx.db.prepare('DELETE FROM analyses WHERE id = ? AND user_id = ?').run(id, userId);
+    await getOne(userId, id);
+    await ctx.db.run('DELETE FROM analyses WHERE id = ? AND user_id = ?', [id, userId]);
     res.status(204).end();
   });
 

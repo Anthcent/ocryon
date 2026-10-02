@@ -35,7 +35,8 @@ export default defineConfig({
       env: {
         PORT: String(API_PORT),
         AUTH_RATE_LIMIT: '10000',
-        DATABASE_PATH: path.join(os.tmpdir(), `ocryon-e2e-${Date.now()}.db`),
+        // PostgreSQL embebido (PGlite) en una carpeta temporal: cada ejecución empieza de cero.
+        DATA_DIR: path.join(os.tmpdir(), `ocryon-e2e-${Date.now()}`),
         OCRSPACE_ENDPOINT: `http://localhost:${MOCK_PORT}/parse/image`,
         GEMINI_API_BASE: `http://localhost:${MOCK_PORT}/v1beta`,
       },

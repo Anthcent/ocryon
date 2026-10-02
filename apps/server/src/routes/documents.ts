@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
+import { fold, foldSql } from '../lib/fold.js';
 import { HttpError, notFound } from '../lib/http-error.js';
 import { currentUser } from '../middleware/auth.js';
 import { geminiGenerate } from '../services/gemini.js';
@@ -40,10 +41,11 @@ const listSchema = z.object({
 
 const idParam = z.coerce.number().int().positive();
 
-const DOC_COLUMNS = `id, template_key AS templateKey, template_name AS templateName, title, fields, text, engine, method,
-  created_at AS createdAt, updated_at AS updatedAt`;
+const DOC_COLUMNS = `id, template_key AS "templateKey", template_name AS "templateName", title, fields, text, engine, method,
+  created_at AS "createdAt", updated_at AS "updatedAt"`;
+const TEMPLATE_COLUMNS = `id, name, emoji, fields, created_at AS "createdAt"`;
 
-type DocRow = { fields: string } & Record<string, unknown>;
+type DocRow = { fields: string; title?: string } & Record<string, unknown>;
 const parseDoc = (row: DocRow) => ({ ...row, fields: JSON.parse(row.fields) });
 
 const extractSchema = z.object({
@@ -56,32 +58,30 @@ export function documentsRouter(ctx: AppContext) {
   const router = Router();
 
   // --- Tipos de documento propios ---
-  router.get('/templates', (req, res) => {
-    const rows = ctx.db
-      .prepare('SELECT id, name, emoji, fields, created_at AS createdAt FROM doc_templates WHERE user_id = ? ORDER BY name')
-      .all(currentUser(req).id) as DocRow[];
+  router.get('/templates', async (req, res) => {
+    const rows = await ctx.db.query<DocRow>(`SELECT ${TEMPLATE_COLUMNS} FROM doc_templates WHERE user_id = ? ORDER BY name, id`, [
+      currentUser(req).id,
+    ]);
     res.json({ templates: rows.map(parseDoc) });
   });
 
-  router.post('/templates', (req, res) => {
+  router.post('/templates', async (req, res) => {
     const userId = currentUser(req).id;
     const data = templateSchema.parse(req.body);
     const keys = new Set(data.fields.map((f) => f.key));
     if (keys.size !== data.fields.length) throw new HttpError(400, 'Hay campos repetidos', 'validation');
-    const id = Number(
-      ctx.db
-        .prepare('INSERT INTO doc_templates (user_id, name, emoji, fields) VALUES (?, ?, ?, ?)')
-        .run(userId, data.name, data.emoji, JSON.stringify(data.fields)).lastInsertRowid,
+    const row = await ctx.db.one<DocRow>(
+      `INSERT INTO doc_templates (user_id, name, emoji, fields) VALUES (?, ?, ?, ?) RETURNING ${TEMPLATE_COLUMNS}`,
+      [userId, data.name, data.emoji, JSON.stringify(data.fields)],
     );
-    const row = ctx.db.prepare('SELECT id, name, emoji, fields, created_at AS createdAt FROM doc_templates WHERE id = ?').get(id) as DocRow;
-    res.status(201).json({ template: parseDoc(row) });
+    res.status(201).json({ template: parseDoc(row!) });
   });
 
-  router.delete('/templates/:id', (req, res) => {
+  router.delete('/templates/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    const result = ctx.db.prepare('DELETE FROM doc_templates WHERE id = ? AND user_id = ?').run(id, userId);
-    if (result.changes === 0) throw notFound('Tipo de documento');
+    const deleted = await ctx.db.run('DELETE FROM doc_templates WHERE id = ? AND user_id = ?', [id, userId]);
+    if (deleted === 0) throw notFound('Tipo de documento');
     res.status(204).end();
   });
 
@@ -97,7 +97,7 @@ export function documentsRouter(ctx: AppContext) {
     async (req, res) => {
       const userId = currentUser(req).id;
       const { fields, text, documentType } = extractSchema.parse(req.body);
-      const settings = loadSettingsRow(ctx, userId);
+      const settings = await loadSettingsRow(ctx, userId);
       const properties = Object.fromEntries(fields.map((f) => [f.key, { type: 'STRING', description: f.label }]));
       const prompt = [
         `Extrae los datos de este ${documentType} a partir de su texto obtenido por OCR.`,
@@ -110,7 +110,7 @@ export function documentsRouter(ctx: AppContext) {
         text,
       ].join('\n');
       const raw = await geminiGenerate({
-        apiKey: getApiKey(ctx, userId, 'gemini'),
+        apiKey: await getApiKey(ctx, userId, 'gemini'),
         model: settings.gemini_model,
         parts: [{ text: prompt }],
         responseSchema: { type: 'OBJECT', properties, required: fields.map((f) => f.key) },
@@ -126,70 +126,72 @@ export function documentsRouter(ctx: AppContext) {
   );
 
   // --- Documentos ---
-  router.get('/', (req, res) => {
-    const userId = currentUser(req).id;
-    const { template, q } = listSchema.parse(req.query);
-    const where: string[] = ['user_id = ?'];
-    const params: string[] = [String(userId)];
-    if (template) {
-      where.push('template_key = ?');
-      params.push(template);
-    }
-    if (q) {
-      // Busca en el título, en los valores del formulario y en el texto completo.
-      where.push('(title LIKE ? OR fields LIKE ? OR text LIKE ?)');
-      const like = `%${q.replace(/[%_]/g, '')}%`;
-      params.push(like, like, like);
-    }
-    const rows = ctx.db
-      .prepare(`SELECT ${DOC_COLUMNS} FROM documents WHERE ${where.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT 500`)
-      .all(...params) as DocRow[];
-    const counts = ctx.db
-      .prepare('SELECT template_key AS templateKey, COUNT(*) AS count FROM documents WHERE user_id = ? GROUP BY template_key')
-      .all(userId);
-    res.json({ documents: rows.map(parseDoc), counts });
-  });
-
-  router.post('/', (req, res) => {
-    const userId = currentUser(req).id;
-    const d = documentSchema.parse(req.body);
-    const id = Number(
-      ctx.db
-        .prepare(
-          `INSERT INTO documents (user_id, template_key, template_name, title, fields, text, engine, method)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(userId, d.templateKey, d.templateName, d.title, JSON.stringify(d.fields), d.text, d.engine, d.method).lastInsertRowid,
-    );
-    res.status(201).json({ document: findDoc(userId, id) });
-  });
-
-  const findDoc = (userId: number, id: number) => {
-    const row = ctx.db.prepare(`SELECT ${DOC_COLUMNS} FROM documents WHERE id = ? AND user_id = ?`).get(id, userId) as DocRow | undefined;
+  const findDoc = async (userId: number, id: number) => {
+    const row = await ctx.db.one<DocRow>(`SELECT ${DOC_COLUMNS} FROM documents WHERE id = ? AND user_id = ?`, [id, userId]);
     if (!row) throw notFound('Documento');
     return parseDoc(row);
   };
 
-  router.get('/:id', (req, res) => {
-    res.json({ document: findDoc(currentUser(req).id, idParam.parse(req.params.id)) });
+  router.get('/', async (req, res) => {
+    const userId = currentUser(req).id;
+    const { template, q } = listSchema.parse(req.query);
+    const where: string[] = ['user_id = ?'];
+    const params: unknown[] = [userId];
+    if (template) {
+      where.push('template_key = ?');
+      params.push(template);
+    }
+    const words = q ? (fold(q).match(/[\p{L}\p{N}@._-]+/gu) ?? []).slice(0, 8) : [];
+    for (const word of words) {
+      // Cada palabra debe aparecer en el título, en los valores del formulario o en el texto, sin importar acentos.
+      where.push(`${foldSql("title || ' ' || fields || ' ' || text")} LIKE ?`);
+      params.push(`%${word.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+    }
+    const rows = await ctx.db.query<DocRow>(
+      `SELECT ${DOC_COLUMNS} FROM documents WHERE ${where.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT 500`,
+      params,
+    );
+    const counts = await ctx.db.query(
+      'SELECT template_key AS "templateKey", COUNT(*) AS count FROM documents WHERE user_id = ? GROUP BY template_key',
+      [userId],
+    );
+    res.json({ documents: rows.map(parseDoc), counts });
   });
 
-  router.patch('/:id', (req, res) => {
+  router.post('/', async (req, res) => {
+    const userId = currentUser(req).id;
+    const d = documentSchema.parse(req.body);
+    const row = await ctx.db.one<DocRow>(
+      `INSERT INTO documents (user_id, template_key, template_name, title, fields, text, engine, method)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${DOC_COLUMNS}`,
+      [userId, d.templateKey, d.templateName, d.title, JSON.stringify(d.fields), d.text, d.engine, d.method],
+    );
+    res.status(201).json({ document: parseDoc(row!) });
+  });
+
+  router.get('/:id', async (req, res) => {
+    res.json({ document: await findDoc(currentUser(req).id, idParam.parse(req.params.id)) });
+  });
+
+  router.patch('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    findDoc(userId, id);
+    const current = await findDoc(userId, id);
     const data = z.object({ title: documentSchema.shape.title.optional(), fields: documentSchema.shape.fields.optional() }).parse(req.body);
-    if (data.title !== undefined) ctx.db.prepare('UPDATE documents SET title = ? WHERE id = ?').run(data.title, id);
-    if (data.fields !== undefined) ctx.db.prepare('UPDATE documents SET fields = ? WHERE id = ?').run(JSON.stringify(data.fields), id);
-    ctx.db.prepare(`UPDATE documents SET updated_at = datetime('now') WHERE id = ?`).run(id);
-    res.json({ document: findDoc(userId, id) });
+    await ctx.db.run('UPDATE documents SET title = ?, fields = ?, updated_at = now() WHERE id = ? AND user_id = ?', [
+      data.title ?? current.title,
+      JSON.stringify(data.fields ?? current.fields),
+      id,
+      userId,
+    ]);
+    res.json({ document: await findDoc(userId, id) });
   });
 
-  router.delete('/:id', (req, res) => {
+  router.delete('/:id', async (req, res) => {
     const userId = currentUser(req).id;
     const id = idParam.parse(req.params.id);
-    findDoc(userId, id);
-    ctx.db.prepare('DELETE FROM documents WHERE id = ? AND user_id = ?').run(id, userId);
+    await findDoc(userId, id);
+    await ctx.db.run('DELETE FROM documents WHERE id = ? AND user_id = ?', [id, userId]);
     res.status(204).end();
   });
 

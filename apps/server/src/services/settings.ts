@@ -8,15 +8,15 @@ export type Engine = 'ocrspace' | 'gemini' | 'tesseract';
 interface SettingsRow {
   default_engine: Engine;
   ocr_language: string;
-  auto_scan: number;
+  auto_scan: boolean;
   gemini_model: string;
   ocrspace_key_enc: string | null;
   gemini_key_enc: string | null;
 }
 
-export function loadSettingsRow(ctx: AppContext, userId: number): SettingsRow {
-  ctx.db.prepare('INSERT OR IGNORE INTO settings (user_id) VALUES (?)').run(userId);
-  return ctx.db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId) as unknown as SettingsRow;
+export async function loadSettingsRow(ctx: AppContext, userId: number): Promise<SettingsRow> {
+  await ctx.db.run('INSERT INTO settings (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING', [userId]);
+  return (await ctx.db.one<SettingsRow>('SELECT * FROM settings WHERE user_id = ?', [userId]))!;
 }
 
 function decryptOrEmpty(ctx: AppContext, value: string | null): string {
@@ -29,8 +29,8 @@ function decryptOrEmpty(ctx: AppContext, value: string | null): string {
 }
 
 /** Ajustes en formato seguro para el cliente: nunca incluye las claves en claro. */
-export function publicSettings(ctx: AppContext, userId: number) {
-  const row = loadSettingsRow(ctx, userId);
+export async function publicSettings(ctx: AppContext, userId: number) {
+  const row = await loadSettingsRow(ctx, userId);
   const describe = (provider: Provider, enc: string | null) => {
     const own = decryptOrEmpty(ctx, enc);
     const fallback = ctx.fallbackKeys[provider];
@@ -43,7 +43,7 @@ export function publicSettings(ctx: AppContext, userId: number) {
   return {
     defaultEngine: row.default_engine,
     ocrLanguage: row.ocr_language,
-    autoScan: row.auto_scan === 1,
+    autoScan: row.auto_scan,
     geminiModel: row.gemini_model,
     keys: {
       ocrspace: describe('ocrspace', row.ocrspace_key_enc),
@@ -52,8 +52,8 @@ export function publicSettings(ctx: AppContext, userId: number) {
   };
 }
 
-export function getApiKey(ctx: AppContext, userId: number, provider: Provider): string {
-  const row = loadSettingsRow(ctx, userId);
+export async function getApiKey(ctx: AppContext, userId: number, provider: Provider): Promise<string> {
+  const row = await loadSettingsRow(ctx, userId);
   const own = decryptOrEmpty(ctx, provider === 'ocrspace' ? row.ocrspace_key_enc : row.gemini_key_enc);
   const key = own || ctx.fallbackKeys[provider];
   if (!key) {

@@ -18,7 +18,9 @@ export const config = {
   port: Number(process.env.PORT ?? 3001),
   /** En contenedores debe ser 0.0.0.0 para aceptar conexiones de fuera del contenedor. */
   host: process.env.HOST ?? '0.0.0.0',
-  databasePath: process.env.DATABASE_PATH ?? path.resolve(here, '../data/ocryon.db'),
+  /** PostgreSQL de producción. Sin ella se usa PGlite (PostgreSQL embebido) guardado en dataDir. */
+  databaseUrl: process.env.DATABASE_URL || undefined,
+  dataDir: process.env.DATA_DIR ?? path.resolve(here, '../data/pglite'),
   jwtSecret: secret('JWT_SECRET', 'dev-only-jwt-secret-change-me'),
   encryptionKey: secret('ENCRYPTION_KEY', 'dev-only-encryption-key-change-me'),
   sessionDays: 7,

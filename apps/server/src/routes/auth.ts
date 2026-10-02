@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { config } from '../config.js';
 import type { AppContext } from '../context.js';
-import { HttpError } from '../lib/http-error.js';
+import { HttpError, isUniqueViolation } from '../lib/http-error.js';
 import { currentUser, requireAuth, SESSION_COOKIE, signSession, type SessionUser } from '../middleware/auth.js';
 
 const password = z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').max(200);
@@ -44,23 +44,33 @@ export function authRouter(ctx: AppContext) {
 
   router.post('/register', limiter, async (req, res) => {
     const data = registerSchema.parse(req.body);
-    const exists = ctx.db.prepare('SELECT 1 FROM users WHERE email = ?').get(data.email);
-    if (exists) throw new HttpError(409, 'Ya existe una cuenta con ese correo', 'email_taken');
+    const taken = new HttpError(409, 'Ya existe una cuenta con ese correo', 'email_taken');
+    if (await ctx.db.one('SELECT 1 FROM users WHERE email = ?', [data.email])) throw taken;
     const hash = await bcrypt.hash(data.password, 12);
-    const result = ctx.db
-      .prepare('INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)')
-      .run(data.email, data.name, hash);
-    const user = { id: Number(result.lastInsertRowid), email: data.email, name: data.name };
-    ctx.db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(user.id);
+    const user = await ctx.db
+      .transaction(async (tx) => {
+        const created = (await tx.one<SessionUser>(
+          'INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?) RETURNING id, email, name',
+          [data.email, data.name, hash],
+        ))!;
+        await tx.run('INSERT INTO settings (user_id) VALUES (?)', [created.id]);
+        return created;
+      })
+      .catch((err) => {
+        // Dos registros simultáneos con el mismo correo: gana uno, el otro recibe 409.
+        if (isUniqueViolation(err)) throw taken;
+        throw err;
+      });
     setSession(res, user);
     res.status(201).json({ user });
   });
 
   router.post('/login', limiter, async (req, res) => {
     const data = loginSchema.parse(req.body);
-    const row = ctx.db
-      .prepare('SELECT id, email, name, password_hash FROM users WHERE email = ?')
-      .get(data.email) as (SessionUser & { password_hash: string }) | undefined;
+    const row = await ctx.db.one<SessionUser & { password_hash: string }>(
+      'SELECT id, email, name, password_hash FROM users WHERE email = ?',
+      [data.email],
+    );
     // Comparamos siempre para no revelar por tiempo de respuesta si el correo existe.
     const ok = await bcrypt.compare(data.password, row?.password_hash ?? '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv');
     if (!row || !ok) throw new HttpError(401, 'Correo o contraseña incorrectos', 'invalid_credentials');
@@ -81,12 +91,12 @@ export function authRouter(ctx: AppContext) {
   router.post('/change-password', limiter, requireAuth(ctx), async (req, res) => {
     const user = currentUser(req);
     const data = changePasswordSchema.parse(req.body);
-    const row = ctx.db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id) as { password_hash: string };
+    const row = (await ctx.db.one<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [user.id]))!;
     if (!(await bcrypt.compare(data.currentPassword, row.password_hash))) {
       throw new HttpError(400, 'La contraseña actual no es correcta', 'invalid_credentials');
     }
     const hash = await bcrypt.hash(data.newPassword, 12);
-    ctx.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
+    await ctx.db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
     res.status(204).end();
   });
 
