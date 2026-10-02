@@ -59,6 +59,36 @@ npm run build
 NODE_ENV=production JWT_SECRET=... ENCRYPTION_KEY=... npm start   # http://localhost:3001
 ```
 
+### Docker (Hexper Ops / Dokploy)
+
+El `Dockerfile` de la raíz compila la web y la API y deja un único proceso Node que sirve ambas
+en **`0.0.0.0:8080`** (`EXPOSE 8080`) como usuario sin privilegios. Incluye un `HEALTHCHECK`
+contra `http://127.0.0.1:8080/` y aplica las migraciones de la base de datos al arrancar, antes
+de aceptar tráfico. En Hexper Ops usa la ruta `/` y **sin base de datos PostgreSQL** (Ocryon usa SQLite).
+
+```bash
+docker build -t ocryon .
+docker run -d -p 8080:8080 -v ocryon-data:/data \
+  -e JWT_SECRET=<secreto> -e ENCRYPTION_KEY=<secreto> ocryon
+```
+
+Variables de entorno (se configuran en el panel del servidor, nunca en Git):
+
+| Variable | Obligatoria | Descripción |
+| --- | --- | --- |
+| `JWT_SECRET` | Sí | Firma de las sesiones. Mínimo 16 caracteres (`openssl rand -hex 32`). Sin ella el contenedor no arranca. |
+| `ENCRYPTION_KEY` | Sí | Cifra las API keys guardadas. Mínimo 16 caracteres. **No la cambies después**: las claves ya guardadas dejarían de poder leerse. |
+| `OCRSPACE_API_KEY`, `GEMINI_API_KEY` | No | Claves globales para los usuarios que no pongan las suyas. |
+| `AUTH_RATE_LIMIT` | No | Intentos de login/registro por IP cada 15 min (20 por defecto). |
+
+`PORT=8080`, `HOST=0.0.0.0` y `DATABASE_PATH=/data/ocryon.db` ya vienen fijados en la imagen.
+
+> **Importante — datos persistentes:** la base de datos vive en `/data`. Si no se monta ahí un
+> volumen persistente, **cada despliegue borra usuarios, libros y documentos**.
+>
+> **HTTPS obligatorio:** en producción la cookie de sesión es `Secure`, así que la app debe
+> abrirse por `https://` (el dominio del proxy). Por `http://` no se podrá iniciar sesión.
+
 ### Tests
 
 ```bash

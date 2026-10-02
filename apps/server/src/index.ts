@@ -19,6 +19,18 @@ if (!config.isProduction) {
   console.warn('⚠ Modo desarrollo: usando secretos de prueba si JWT_SECRET/ENCRYPTION_KEY no están definidos.');
 }
 
-app.listen(config.port, () => {
-  console.log(`Ocryon API escuchando en http://localhost:${config.port}`);
+// Las migraciones ya se aplicaron al abrir la base de datos: a partir de aquí se acepta tráfico.
+const server = app.listen(config.port, config.host, () => {
+  console.log(`Ocryon escuchando en http://${config.host}:${config.port}`);
 });
+
+// Parada ordenada (docker stop / redespliegue): termina las peticiones en curso y cierra la base.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    server.close(() => {
+      db.close();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 10_000).unref();
+  });
+}

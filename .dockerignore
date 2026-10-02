@@ -1,0 +1,24 @@
+# Solo entra en la imagen lo necesario para compilar: package*.json y apps/.
+*
+!package.json
+!package-lock.json
+!apps/server/package.json
+!apps/server/tsconfig.json
+!apps/server/src/**
+!apps/web/package.json
+!apps/web/tsconfig*.json
+!apps/web/index.html
+!apps/web/vite.config.ts
+!apps/web/scripts/**
+!apps/web/src/**
+!apps/web/public/**
+
+# Nunca: dependencias, compilados, datos, pruebas ni secretos.
+**/node_modules
+**/dist
+apps/web/public/tesseract
+apps/server/src/**/*.test.ts
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*

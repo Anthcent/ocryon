@@ -16,6 +16,8 @@ function secret(name: string, devFallback: string): string {
 export const config = {
   isProduction,
   port: Number(process.env.PORT ?? 3001),
+  /** En contenedores debe ser 0.0.0.0 para aceptar conexiones de fuera del contenedor. */
+  host: process.env.HOST ?? '0.0.0.0',
   databasePath: process.env.DATABASE_PATH ?? path.resolve(here, '../data/ocryon.db'),
   jwtSecret: secret('JWT_SECRET', 'dev-only-jwt-secret-change-me'),
   encryptionKey: secret('ENCRYPTION_KEY', 'dev-only-encryption-key-change-me'),
