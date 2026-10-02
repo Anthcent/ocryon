@@ -1,8 +1,7 @@
-# syntax=docker/dockerfile:1
-
 # Ocryon: API (Express) + frontend compilado (React) servidos por el mismo proceso Node
 # en 0.0.0.0:8080. Con DATABASE_URL usa PostgreSQL y aplica las migraciones pendientes al
-# arrancar, antes de aceptar tráfico. Ningún secreto se incluye en la imagen: se configuran en tiempo de ejecución.
+# arrancar, antes de aceptar tráfico. Ningún secreto se incluye en la imagen: se configuran en tiempo de ejecución
+# (si faltan JWT_SECRET / ENCRYPTION_KEY, el servidor los genera y guarda en la base de datos).
 
 ARG NODE_IMAGE=node:24.21.0-alpine3.24
 
@@ -31,6 +30,7 @@ FROM ${NODE_IMAGE}
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8080 \
+    LISTEN_PORT=8080 \
     DATA_DIR=/data/pglite \
     WEB_DIST=/app/apps/web/dist
 WORKDIR /app/apps/server
@@ -44,6 +44,7 @@ RUN mkdir -p /data && chown node:node /data
 
 USER node
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# start-period amplio: al desplegar, la app espera a que PostgreSQL esté listo antes de escuchar.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
 CMD ["node", "--disable-warning=ExperimentalWarning", "dist/index.js"]

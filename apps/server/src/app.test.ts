@@ -7,6 +7,7 @@ import { createApp } from './app.js';
 import { openDatabase, toPositional, type Database } from './db/index.js';
 import { migrations } from './db/migrations.js';
 import { createCipher } from './lib/crypto.js';
+import { resolveSecret } from './lib/secrets.js';
 import { buildSnippet, searchTerms } from './lib/snippet.js';
 import { toTsQuery } from './routes/search.js';
 
@@ -298,6 +299,13 @@ describe('utilidades', () => {
     expect(toTsQuery(searchTerms('hola "mundo" | !x* & Ñandú'))).toBe('hola & mundo & x & nandu:*');
     expect(searchTerms('  ')).toEqual([]);
     expect(toPositional('a = ? AND b IN (?, ?)')).toBe('a = $1 AND b IN ($2, $3)');
+  });
+
+  it('genera y conserva los secretos que no se configuraron; el del entorno tiene prioridad', async () => {
+    const generated = await resolveSecret(db, 'PRUEBA_SECRET', undefined);
+    expect(generated).toMatch(/^[0-9a-f]{64}$/);
+    expect(await resolveSecret(db, 'PRUEBA_SECRET', undefined)).toBe(generated);
+    expect(await resolveSecret(db, 'PRUEBA_SECRET', 'desde-el-entorno-123')).toBe('desde-el-entorno-123');
   });
 
   it('recorta el fragmento alrededor de la coincidencia', () => {

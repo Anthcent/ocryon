@@ -100,4 +100,12 @@ export const migrations: string[] = [
   );
   CREATE INDEX idx_documents_user ON documents(user_id, template_key, created_at DESC);
   `,
+  /* sql */ `
+  -- v2: secretos generados por el servidor cuando no se configuran JWT_SECRET / ENCRYPTION_KEY.
+  CREATE TABLE app_secrets (
+    name       text PRIMARY KEY,
+    value      text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  `,
 ];

@@ -88,12 +88,12 @@ Variables de entorno (se configuran en el panel del servidor, nunca en Git):
 | Variable | Obligatoria | Descripción |
 | --- | --- | --- |
 | `DATABASE_URL` | Sí, en producción | PostgreSQL. Hexper Ops la inyecta sola. Sin ella se usa PGlite dentro del contenedor y **los datos se pierden en cada despliegue** (salvo que se monte un volumen en `/data`). |
-| `JWT_SECRET` | Sí | Firma de las sesiones. Mínimo 16 caracteres (`openssl rand -hex 32`). Sin ella el contenedor no arranca. |
-| `ENCRYPTION_KEY` | Sí | Cifra las API keys guardadas. Mínimo 16 caracteres. **No la cambies después**: las claves ya guardadas dejarían de poder leerse. |
+| `JWT_SECRET` | Recomendada | Firma de las sesiones. Mínimo 16 caracteres (`openssl rand -hex 32`). Si falta, el servidor genera una y la guarda en la base de datos. |
+| `ENCRYPTION_KEY` | Recomendada | Cifra las API keys guardadas. Mínimo 16 caracteres. Si falta, se genera y se guarda en la base de datos (más seguro definirla aparte). **No la cambies después**: las claves ya guardadas dejarían de poder leerse. |
 | `OCRSPACE_API_KEY`, `GEMINI_API_KEY` | No | Claves globales para los usuarios que no pongan las suyas. |
 | `AUTH_RATE_LIMIT` | No | Intentos de login/registro por IP cada 15 min (20 por defecto). |
 
-`PORT=8080` y `HOST=0.0.0.0` ya vienen fijados en la imagen.
+La imagen escucha siempre en `0.0.0.0:8080` (`LISTEN_PORT=8080`), aunque la plataforma inyecte otro `PORT`. Si PostgreSQL tarda en arrancar, la app reintenta la conexión durante unos dos minutos.
 
 > **HTTPS obligatorio:** en producción la cookie de sesión es `Secure`, así que la app debe
 > abrirse por `https://` (el dominio del proxy). Por `http://` no se podrá iniciar sesión.

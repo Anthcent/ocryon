@@ -133,12 +133,30 @@ export interface DatabaseOptions {
 export async function openDatabase(options: DatabaseOptions): Promise<Database> {
   if (options.url) {
     const db = postgres(options.url);
+    await waitForPostgres(db);
     await db.withMigrationLock(() => migrate(db));
     return db;
   }
   const db = pglite(options.dataDir);
   await migrate(db);
   return db;
+}
+
+/**
+ * Al desplegar, el contenedor de la app puede arrancar antes que PostgreSQL: se reintenta durante
+ * unos dos minutos, dejando constancia en el log, antes de rendirse.
+ */
+async function waitForPostgres(db: Database, attempts = 24, delayMs = 5_000) {
+  for (let i = 1; ; i++) {
+    try {
+      await db.one('SELECT 1');
+      return;
+    } catch (err) {
+      if (i >= attempts) throw new Error(`No se pudo conectar a PostgreSQL (DATABASE_URL): ${(err as Error).message}`);
+      console.warn(`PostgreSQL aún no responde (intento ${i}/${attempts}): ${(err as Error).message}`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
 }
 
 /** Aplica, en orden y cada una en su transacción, las migraciones que aún no constan como aplicadas. */
