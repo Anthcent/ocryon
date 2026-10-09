@@ -79,16 +79,20 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
     expect(text.indexOf('segunda')).toBeLessThan(text.indexOf('primera'));
     expect(text.indexOf('primera')).toBeLessThan(text.indexOf('tercera'));
 
+    // Exportar como texto: todas las páginas, en el orden del libro.
+    await page.getByRole('button', { name: 'Exportar', exact: true }).click();
+    const exportDialog = page.getByRole('dialog', { name: 'Exportar' });
+    await exportDialog.getByRole('button', { name: 'Texto', exact: true }).click();
+    await exportDialog.getByRole('checkbox', { name: 'Título en cada página' }).uncheck();
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Exportar .txt' }).click();
-    const file = await (await download).path();
-    const exported = fs.readFileSync(file, 'utf8');
-    expect(exported).toBe('Contenido de la segunda\n\nContenido de la primera\n\nContenido de la tercera');
+    await exportDialog.getByRole('button', { name: /^Descargar Texto/ }).click();
+    const exported = fs.readFileSync((await (await download).path())!, 'utf8');
     expect((await download).suggestedFilename()).toBe('Libro de prueba.txt');
+    expect(exported).toContain('Contenido de la segunda\n\nContenido de la primera\n\nContenido de la tercera');
 
     await page.getByRole('button', { name: 'Copiar' }).click();
     await expectToast(page, 'Texto copiado');
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(exported);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Contenido de la segunda\n\nContenido de la primera\n\nContenido de la tercera');
 
     await page.getByRole('button', { name: 'Páginas', exact: true }).click();
     await page.getByRole('button', { name: 'Borrar página' }).last().click();

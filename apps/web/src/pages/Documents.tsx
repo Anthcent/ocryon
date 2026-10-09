@@ -1,11 +1,13 @@
 import clsx from 'clsx';
-import { Download, FileScan, Plus, Search, Trash2, X } from 'lucide-react';
+import { Download, FileDown, FileScan, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
+import { ReportModal } from '../components/ReportModal';
 import { Button, Card, EmptyState, Input, PageLoader } from '../components/ui';
 import { documentsToCsv, downloadFile, TemplateModal, useDocTemplates } from '../documents/shared';
 import { api } from '../lib/api';
+import { documentsReportModel } from '../lib/export';
 import { timeAgo } from '../lib/format';
 import type { SavedDocument } from '../lib/types';
 
@@ -18,6 +20,7 @@ export function DocumentsPage() {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [creatingType, setCreatingType] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 250);
@@ -112,6 +115,11 @@ export function DocumentsPage() {
               <TypeChip key={c.key} selected={template === c.key} onClick={() => setTemplate(template === c.key ? null : c.key)} emoji={c.emoji} label={c.name} count={counts[c.key]} />
             ))}
           </div>
+          {docs && docs.length > 0 && (
+            <Button variant="secondary" size="sm" icon={<FileDown className="size-4" />} onClick={() => setReporting(true)}>
+              Reporte
+            </Button>
+          )}
           {selected && docs && docs.length > 0 && (
             <Button
               variant="ghost"
@@ -185,6 +193,16 @@ export function DocumentsPage() {
         </div>
         {custom.length === 0 && <p className="mt-2 text-sm font-bold text-hare">¿Tu documento no está? Crea un tipo con los campos que necesitas.</p>}
       </section>
+
+      <ReportModal
+        open={reporting}
+        onClose={() => setReporting(false)}
+        title="Reporte de documentos"
+        items={docs ?? []}
+        itemLabel={(d) => `${d.title} · ${d.templateName}`}
+        optionLabel="Incluir la ficha completa de cada documento"
+        build={(details, chosen) => documentsReportModel(chosen, selected ? `Reporte de ${selected.name}` : 'Reporte de documentos', { details })}
+      />
 
       <TemplateModal open={creatingType} onClose={() => setCreatingType(false)} onCreated={() => void reload()} />
     </div>

@@ -1,7 +1,8 @@
 import clsx from 'clsx';
-import { BookOpen, BookOpenText, FileText, Library, Plus, ScanLine } from 'lucide-react';
+import { BookOpen, BookOpenText, Download, FileText, Library, Plus, ScanLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { ExportModal, type ExportablePage } from '../components/ExportModal';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { LessonProgress } from '../components/ActionTile';
 import { BookCover } from '../components/BookCover';
@@ -209,9 +210,31 @@ function LibraryHero({ onCreate }: { onCreate: () => void }) {
 }
 
 function IndividualList({ filter }: { filter: string }) {
+  const { toast } = useFeedback();
   const [scans, setScans] = useState<Scan[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [exportPages, setExportPages] = useState<ExportablePage[] | null>(null);
+  const [preparing, setPreparing] = useState(false);
+
+  /** Para exportar hacen falta todos los escaneos sueltos, no solo los cargados en pantalla. */
+  const openExport = async () => {
+    setPreparing(true);
+    try {
+      const all: Scan[] = [];
+      for (let offset = 0; ; offset += 100) {
+        const r = await api.scans.list({ scope: 'individual', limit: 100, offset });
+        all.push(...r.scans);
+        if (all.length >= r.total || r.scans.length === 0) break;
+      }
+      // Del más antiguo al más reciente, como se escanearon.
+      setExportPages(all.reverse().map((s, i) => ({ id: s.id, title: s.title, text: s.text, pageLabel: s.pageLabel, number: i + 1 })));
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   useEffect(() => {
     api.scans
@@ -253,6 +276,21 @@ function IndividualList({ filter }: { filter: string }) {
   const visible = scans.filter((s) => matches(s.title, filter));
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-extrabold text-wolf">
+          {total} {total === 1 ? 'escaneo suelto' : 'escaneos sueltos'}
+        </span>
+        <Button size="sm" variant="ghost" icon={<Download className="size-4" />} loading={preparing} onClick={openExport}>
+          Exportar
+        </Button>
+      </div>
+      <ExportModal
+        open={exportPages !== null}
+        onClose={() => setExportPages(null)}
+        title="Escaneos sueltos"
+        fileName="Escaneos sueltos"
+        pages={exportPages ?? []}
+      />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((s) => (
           <Link key={s.id} to={`/escaneo/${s.id}`} className="block">

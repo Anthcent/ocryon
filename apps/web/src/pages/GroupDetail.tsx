@@ -7,12 +7,13 @@ import { ActionTile, LessonProgress } from '../components/ActionTile';
 import { BookCover } from '../components/BookCover';
 import { BookViewer } from '../components/BookViewer';
 import { AnalysisPanel } from '../components/AnalysisPanel';
+import { ExportModal } from '../components/ExportModal';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { Reader } from '../components/Reader';
 import { Button, EmptyState, PageLoader, Segmented } from '../components/ui';
 import { api } from '../lib/api';
 import { categoryEmoji, GROUP_STYLES } from '../lib/constants';
-import { copyText, downloadText, formatDate, formatNumber } from '../lib/format';
+import { copyText, formatDate, formatNumber } from '../lib/format';
 import type { Group, Scan } from '../lib/types';
 import { GroupFormModal } from './Catalog';
 
@@ -26,6 +27,7 @@ export function GroupDetailPage() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [tab, setTab] = useState<Tab>('paginas');
   const [editing, setEditing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [notFound, setNotFound] = useState(false);
   // «?libro=1» abre directamente el modo libro (desde el catálogo).
   const [params, setParams] = useSearchParams();
@@ -110,7 +112,6 @@ export function GroupDetailPage() {
     setTab('analisis');
     document.getElementById('group-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  const exportTxt = () => downloadText(`${group.title}.txt`, fullText);
   const progress = group.totalPages ? Math.min(100, (scans.length / group.totalPages) * 100) : null;
 
   return (
@@ -172,7 +173,7 @@ export function GroupDetailPage() {
 
       {/* Acciones rápidas (móvil y tablet); en escritorio van en la columna lateral */}
       <div className="grid grid-cols-4 gap-2 lg:hidden">
-        <ActionTile icon={<Download />} label="Exportar .txt" shortLabel=".txt" tone="blue" disabled={!scans.length} onClick={exportTxt} compact />
+        <ActionTile icon={<Download />} label="Exportar" tone="blue" disabled={!scans.length} onClick={() => setExporting(true)} compact />
         <ActionTile icon={<Copy />} label="Copiar" tone="purple" disabled={!scans.length} onClick={copyAll} compact />
         <ActionTile icon={<Pencil />} label="Editar grupo" shortLabel="Editar" tone="orange" onClick={() => setEditing(true)} compact />
         <ActionTile icon={<Trash2 />} label="Borrar grupo" shortLabel="Borrar" tone="red" onClick={removeGroup} compact />
@@ -276,7 +277,7 @@ export function GroupDetailPage() {
         <aside className="hidden space-y-4 lg:sticky lg:top-24 lg:block">
           <div className="overflow-hidden rounded-3xl border-2 border-swan bg-white">
             <div className="border-b-2 border-swan px-4 py-3 text-sm font-black uppercase tracking-wide text-hare">Opciones</div>
-            <OptionRow icon={<Download />} tone="bg-macaw-light text-macaw-dark" label="Exportar .txt" name="Exportar .txt" disabled={!scans.length} onClick={exportTxt} />
+            <OptionRow icon={<Download />} tone="bg-macaw-light text-macaw-dark" label="Exportar a Word, PDF o texto" name="Exportar" disabled={!scans.length} onClick={() => setExporting(true)} />
             <OptionRow icon={<Copy />} tone="bg-beetle-light text-beetle-dark" label="Copiar todo el texto" name="Copiar" disabled={!scans.length} onClick={copyAll} />
             <OptionRow icon={<BrainCircuit />} tone="bg-bee-light text-bee-dark" label="Analizar el libro" name="Analizar" disabled={!scans.length} onClick={openAnalysis} />
             <OptionRow icon={<Pencil />} tone="bg-fox-light text-fox-dark" label="Editar datos del libro" name="Editar grupo" onClick={() => setEditing(true)} />
@@ -297,6 +298,19 @@ export function GroupDetailPage() {
       </div>
 
       {bookOpen && scans.length > 0 && <BookViewer group={group} pages={scans} onClose={() => setBookOpen(false)} />}
+
+      <ExportModal
+        open={exporting}
+        onClose={() => setExporting(false)}
+        title={group.title}
+        subtitle={group.author ? `de ${group.author}` : undefined}
+        meta={[
+          ...(group.category ? [['Categoría', group.category] as [string, string]] : []),
+          ...(group.description ? [['Descripción', group.description] as [string, string]] : []),
+        ]}
+        fileName={group.title}
+        pages={scans.map((s, i) => ({ id: s.id, title: s.title, text: s.text, pageLabel: s.pageLabel, number: i + 1 }))}
+      />
 
       <GroupFormModal open={editing} onClose={() => setEditing(false)} group={group} onSaved={setGroup} />
     </div>

@@ -13,4 +13,6 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': `http://localhost:${process.env.API_PORT ?? 3001}` },
   },
+  // El generador de PDF (con su fuente incluida) pesa ~1,8 MB, pero se descarga solo al exportar.
+  build: { chunkSizeWarningLimit: 2000 },
 });

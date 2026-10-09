@@ -4,11 +4,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ActionTile, LessonProgress } from '../components/ActionTile';
 import { AnalysisPanel } from '../components/AnalysisPanel';
+import { ExportModal } from '../components/ExportModal';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { Button, Card, EmptyState, Input, Modal, PageLoader, Segmented, Textarea } from '../components/ui';
 import { api } from '../lib/api';
 import { ENGINE_LABEL, GROUP_STYLES, LANGUAGES } from '../lib/constants';
-import { copyText, downloadText, formatDate, formatNumber } from '../lib/format';
+import { copyText, formatDate, formatNumber } from '../lib/format';
 import type { Group, Scan } from '../lib/types';
 
 type Tab = 'texto' | 'analisis';
@@ -23,6 +24,7 @@ export function ScanDetailPage() {
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<Tab>('texto');
   const [moving, setMoving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [siblings, setSiblings] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
@@ -122,7 +124,7 @@ export function ScanDetailPage() {
     <>
       <ActionTile icon={<Pencil />} label="Editar" tone="blue" onClick={startEdit} disabled={editing} compact={compact} />
       <ActionTile icon={<Copy />} label="Copiar" tone="purple" onClick={copy} compact={compact} />
-      <ActionTile icon={<Download />} label="Descargar" shortLabel=".txt" tone="green" onClick={() => downloadText(`${scan.title || 'escaneo'}.txt`, scan.text)} compact={compact} />
+      <ActionTile icon={<Download />} label="Exportar" tone="green" onClick={() => setExporting(true)} compact={compact} />
       <ActionTile icon={<FolderInput />} label="Mover" tone="orange" onClick={() => setMoving(true)} compact={compact} />
       <ActionTile icon={<Trash2 />} label="Borrar" tone="red" onClick={remove} compact={compact} />
     </>
@@ -240,6 +242,16 @@ export function ScanDetailPage() {
           ))}
         </div>
       </Modal>
+
+      <ExportModal
+        open={exporting}
+        onClose={() => setExporting(false)}
+        title={scan.title || 'Escaneo'}
+        subtitle={scan.groupTitle ?? undefined}
+        meta={[...(scan.pageLabel ? [['Página impresa', scan.pageLabel] as [string, string]] : []), ['Escaneado', formatDate(scan.createdAt)]]}
+        fileName={scan.title || 'escaneo'}
+        pages={[{ id: scan.id, title: scan.title, text: scan.text, pageLabel: scan.pageLabel }]}
+      />
     </div>
   );
 }

@@ -20,7 +20,11 @@ export default defineConfig({
     locale: 'es-ES',
     timezoneId: 'America/Lima',
     permissions: ['camera', 'clipboard-read', 'clipboard-write'],
-    launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+    launchOptions: {
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+      // En Linux, Chromium solo conserva tildes y «ñ» en los nombres descargados con un locale UTF-8.
+      env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' },
+    },
     trace: 'retain-on-failure',
   },
   projects: [

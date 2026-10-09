@@ -1,10 +1,12 @@
-import { ArrowLeft, ChevronDown, Copy, FileJson, FileSpreadsheet, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Copy, FileDown, FileJson, FileSpreadsheet, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
+import { ReportModal } from '../components/ReportModal';
 import { Badge, Button, Card, Input, PageLoader } from '../components/ui';
 import { DocFieldsForm, documentsToCsv, downloadFile, useDocTemplates } from '../documents/shared';
 import { api } from '../lib/api';
+import { documentModel } from '../lib/export';
 import { ENGINE_LABEL } from '../lib/constants';
 import { copyText, formatDate } from '../lib/format';
 import type { DocField, SavedDocument } from '../lib/types';
@@ -18,6 +20,7 @@ export function DocumentDetailPage() {
   const [title, setTitle] = useState('');
   const [fields, setFields] = useState<DocField[]>([]);
   const [saving, setSaving] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     api.documents
@@ -100,7 +103,10 @@ export function DocumentDetailPage() {
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <Button variant="secondary" size="sm" className="col-span-2 sm:col-span-1" icon={<FileDown className="size-4" />} onClick={() => setReporting(true)}>
+          Word / PDF
+        </Button>
         <Button variant="plain" size="sm" icon={<Copy className="size-4" />} onClick={copyData}>
           Copiar datos
         </Button>
@@ -141,6 +147,14 @@ export function DocumentDetailPage() {
           <pre className="max-h-96 overflow-auto whitespace-pre-wrap px-4 pb-4 font-serif text-sm leading-relaxed text-wolf">{doc.text}</pre>
         </details>
       )}
+
+      <ReportModal
+        open={reporting}
+        onClose={() => setReporting(false)}
+        title="Exportar documento"
+        optionLabel={doc.text.trim() ? 'Incluir el texto leído' : undefined}
+        build={(includeText) => documentModel(current, includeText)}
+      />
 
       {dirty && (
         <div className="sticky bottom-24 z-10 flex gap-2 lg:bottom-4">
