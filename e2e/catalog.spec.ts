@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { createScans, expectToast, signUp } from './helpers';
 
 test.describe('Catálogo y manejo de lo escaneado', () => {
@@ -263,4 +263,82 @@ test.describe('Modo libro', () => {
     await page.getByRole('slider', { name: 'Ir a la página' }).fill('2');
     await expect(page.getByText(/Texto de la hoja (2|3)/).first()).toBeVisible();
   });
+
+  test('pasa hacia adelante y hacia atrás de cualquier forma: dedo, toques, botones seguidos y botón atrás', async ({ page }) => {
+    await signUp(page);
+    // Páginas largas: el texto se desplaza en vertical dentro de la hoja.
+    const long = (n: number) => `Texto de la página ${n}. ` + 'Una línea de texto bastante larga para que la hoja tenga desplazamiento. '.repeat(40);
+    const { groupId } = await createScans(page, { newGroup: { title: 'Largo' }, items: [1, 2, 3, 4, 5, 6].map((n) => ({ text: long(n), engine: 'manual' })) });
+    await page.goto(`/catalogo/grupo/${groupId}`);
+    await page.getByRole('button', { name: 'Abrir en modo libro' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Modo libro: Largo' });
+    const book = dialog.getByTestId('book');
+    const box = (await book.boundingBox())!;
+    const y = box.y + box.height / 2;
+    const at = (pos: number) => expect(book).toHaveAttribute('data-pos', String(pos));
+    const settled = () => expect(dialog.getByTestId('flipping-leaf')).toHaveCount(0);
+    const mobile = page.viewportSize()!.width < 900;
+
+    // Deslizar sobre el texto: con el dedo en móvil, con el ratón en escritorio.
+    const swipe = async (fromX: number, toX: number) => {
+      if (mobile) await touchSwipe(page, box.x + box.width * fromX, box.x + box.width * toX, y);
+      else {
+        await page.mouse.move(box.x + box.width * fromX, y);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width * toX, y, { steps: 10 });
+        await page.mouse.up();
+      }
+      await settled();
+    };
+    await swipe(0.8, 0.15);
+    await at(1);
+    await swipe(0.8, 0.15);
+    await at(2);
+    await swipe(0.2, 0.85); // hacia atrás
+    await at(1);
+    await swipe(0.2, 0.85);
+    await at(0);
+
+    // Toques: lado derecho avanza, lado izquierdo retrocede.
+    await page.mouse.click(box.x + box.width * 0.9, y);
+    await settled();
+    await at(1);
+    await page.mouse.click(box.x + box.width * 0.9, y);
+    await settled();
+    await at(2);
+    await page.mouse.click(box.x + box.width * 0.1, y);
+    await settled();
+    await at(1);
+
+    // Dos toques seguidos en «anterior» retroceden dos veces (el segundo no se pierde).
+    await page.keyboard.press('ArrowRight');
+    await settled();
+    await page.keyboard.press('ArrowRight');
+    await settled();
+    await at(3);
+    const back = dialog.getByRole('button', { name: /^(Anterior|Página anterior)$/ }).locator('visible=true');
+    await back.click();
+    await back.click();
+    await settled();
+    await at(1);
+
+    // El botón «atrás» del móvil / navegador cierra el libro sin salir de la ficha.
+    await page.goBack();
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(new RegExp(`/catalogo/grupo/${groupId}$`));
+    await expect(page.getByRole('heading', { name: 'Largo' })).toBeVisible();
+  });
 });
+
+/** Deslizamiento táctil real (eventos touch del navegador), no del ratón. */
+async function touchSwipe(page: Page, fromX: number, toX: number, y: number) {
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type: string, x: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  await send('touchStart', fromX);
+  for (let i = 1; i <= 12; i++) {
+    await send('touchMove', fromX + ((toX - fromX) * i) / 12);
+    await page.waitForTimeout(16);
+  }
+  await send('touchEnd', toX);
+  await cdp.detach();
+}

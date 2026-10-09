@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { ArrowLeft, BookOpen, BookOpenText, BrainCircuit, ChevronLeft, ChevronRight, Clock, Copy, Download, FileText, LayoutGrid, Pencil, Plus, Trash2, Type } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { ActionTile, LessonProgress } from '../components/ActionTile';
@@ -32,7 +32,20 @@ export function GroupDetailPage() {
   // «?libro=1» abre directamente el modo libro (desde el catálogo).
   const [params, setParams] = useSearchParams();
   const bookOpen = params.get('libro') === '1';
-  const setBookOpen = (open: boolean) => setParams(open ? { libro: '1' } : {}, { replace: true });
+  // Abrir el libro añade una entrada al historial: el botón «atrás» del móvil lo cierra
+  // en lugar de salir de la ficha.
+  const pushedBook = useRef(false);
+  const setBookOpen = (open: boolean) => {
+    if (open) {
+      pushedBook.current = true;
+      setParams({ libro: '1' });
+    } else if (pushedBook.current) {
+      pushedBook.current = false;
+      navigate(-1);
+    } else {
+      setParams({}, { replace: true });
+    }
+  };
 
   useEffect(() => {
     api.groups

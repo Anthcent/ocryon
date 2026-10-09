@@ -22,7 +22,7 @@ type Leaf =
   | { kind: 'page'; page: BookPage; n: number }
   | { kind: 'end' };
 
-const FLIP_MS = 800;
+const FLIP_MS = 650;
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
@@ -58,7 +58,10 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
   const [hint, setHint] = useState(true);
   const bookRef = useRef<HTMLDivElement>(null);
   // El avance se guarda también aquí: al soltar, el estado de React puede no haberse actualizado aún.
-  const drag = useRef<{ x: number; t: number; dir: 1 | -1 | 0; width: number; progress: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; t: number; dir: 1 | -1 | 0; width: number; progress: number } | null>(null);
+  // Giro pedido mientras otro se anima: se ejecuta al terminar, en vez de ignorar el toque.
+  const queued = useRef<1 | -1 | null>(null);
+  const lastWheel = useRef(0);
 
   // Al cambiar entre una y dos páginas se conserva aproximadamente la posición.
   const lastSpread = useRef(spread);
@@ -70,54 +73,85 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
   }, [spread]);
 
   const clampedPos = Math.min(pos, steps - 1);
+  // Posición y giro actuales también en refs: varios toques seguidos llegan antes de que React vuelva a pintar.
+  const posRef = useRef(clampedPos);
+  posRef.current = clampedPos;
+  const flipRef = useRef(flip);
+  flipRef.current = flip;
   const leaf = (i: number): Leaf => leaves[i] ?? { kind: 'blank' };
-  const canGo = (dir: 1 | -1) => clampedPos + dir >= 0 && clampedPos + dir < steps;
+  const canGo = (dir: 1 | -1) => posRef.current + dir >= 0 && posRef.current + dir < steps;
 
   /** Termina (o cancela) el giro animando desde el punto actual hasta `target`. */
   const settle = useCallback(
     (f: Flip, target: 0 | 1) => {
       if (reducedMotion) {
-        if (target === 1) setPos((p) => p + f.dir);
+        if (target === 1) {
+          posRef.current += f.dir;
+          setPos(posRef.current);
+        }
+        flipRef.current = null;
         return setFlip(null);
       }
-      const duration = Math.max(220, FLIP_MS * Math.abs(target - f.progress));
-      setFlip({ ...f, progress: target, target, duration });
+      const duration = Math.max(200, FLIP_MS * Math.abs(target - f.progress));
+      const next: Flip = { ...f, progress: target, target, duration };
+      flipRef.current = next;
+      setFlip(next);
     },
     [reducedMotion],
   );
 
+  const goRef = useRef<(dir: 1 | -1) => void>(() => {});
   const go = useCallback(
     (dir: 1 | -1) => {
-      if (flip || !canGo(dir)) return;
       setHint(false);
-      if (reducedMotion) return setPos((p) => p + dir);
+      const current = flipRef.current;
+      if (current) {
+        // Si una hoja se está animando, este giro espera su turno; si se está arrastrando, se ignora.
+        if (current.target !== null) queued.current = dir;
+        return;
+      }
+      if (!canGo(dir)) return;
+      if (reducedMotion) {
+        posRef.current += dir;
+        return setPos(posRef.current);
+      }
       const f: Flip = { dir, progress: 0, target: null, duration: 0 };
+      flipRef.current = f;
       setFlip(f);
       // En el siguiente cuadro se anima hasta el final para que la transición CSS se ejecute.
       requestAnimationFrame(() => requestAnimationFrame(() => settle(f, 1)));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flip, clampedPos, steps, reducedMotion, settle],
+    [steps, reducedMotion, settle],
   );
+  goRef.current = go;
 
-  // Referencia al giro actual: el final puede llegar por transitionend o por el temporizador de
-  // seguridad, y solo debe aplicarse una vez (y fuera de un actualizador de estado).
-  const flipRef = useRef(flip);
-  flipRef.current = flip;
+  // El final puede llegar por transitionend o por el temporizador de seguridad, y solo debe
+  // aplicarse una vez (y fuera de un actualizador de estado).
   const onFlipEnd = useCallback(() => {
     const f = flipRef.current;
     if (!f || f.target === null) return;
     flipRef.current = null;
-    if (f.target === 1) setPos((p) => p + f.dir);
+    if (f.target === 1) {
+      posRef.current += f.dir;
+      setPos(posRef.current);
+    }
     setFlip(null);
+    const next = queued.current;
+    queued.current = null;
+    if (next) requestAnimationFrame(() => goRef.current(next));
   }, []);
 
   // --- Arrastre con el dedo o el ratón: la hoja sigue al puntero ---
   const onPointerDown = (e: React.PointerEvent) => {
-    if (flip?.target !== undefined && flip?.target !== null) return;
     if ((e.target as HTMLElement).closest('button, a, input')) return;
+    // Un nuevo gesto no espera a la animación anterior: se termina al instante.
+    if (flipRef.current?.target != null) {
+      queued.current = null;
+      onFlipEnd();
+    }
     const rect = bookRef.current?.getBoundingClientRect();
-    drag.current = { x: e.clientX, t: performance.now(), dir: 0, width: rect ? (spread ? rect.width / 2 : rect.width) : 400, progress: 0 };
+    drag.current = { x: e.clientX, y: e.clientY, t: performance.now(), dir: 0, width: rect ? (spread ? rect.width / 2 : rect.width) : 400, progress: 0 };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -126,8 +160,13 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
     const dx = e.clientX - d.x;
     if (d.dir === 0) {
       if (Math.abs(dx) < 10) return;
+      // Un desplazamiento vertical (leer la página) no pasa de hoja.
+      if (Math.abs(e.clientY - d.y) > Math.abs(dx)) {
+        drag.current = null;
+        return;
+      }
       const dir = dx < 0 ? 1 : -1;
-      if (!canGo(dir) || flip) {
+      if (!canGo(dir) || flipRef.current) {
         drag.current = null;
         return;
       }
@@ -137,7 +176,9 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
     }
     const progress = Math.min(1, Math.max(0, (d.dir === 1 ? -dx : dx) / (d.width * 1.1)));
     d.progress = progress;
-    setFlip({ dir: d.dir, progress, target: null, duration: 0 });
+    const f: Flip = { dir: d.dir, progress, target: null, duration: 0 };
+    flipRef.current = f;
+    setFlip(f);
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -146,12 +187,13 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
     if (!d) return;
     const dx = e.clientX - d.x;
     if (d.dir === 0) {
-      // Toque sin arrastre: los bordes de la página también pasan de página.
+      // Toque sin arrastre: a doble página, la página izquierda retrocede y la derecha avanza;
+      // con una sola, el lado izquierdo retrocede y el derecho avanza (el centro no hace nada).
       const rect = bookRef.current?.getBoundingClientRect();
-      if (!rect || Math.abs(dx) > 10) return;
+      if (!rect || Math.abs(dx) > 10 || Math.abs(e.clientY - d.y) > 10) return;
       const x = (e.clientX - rect.left) / rect.width;
-      if (x > 0.8) go(1);
-      else if (x < 0.2) go(-1);
+      if (spread ? x >= 0.5 : x > 0.6) go(1);
+      else if (spread ? x < 0.5 : x < 0.4) go(-1);
       return;
     }
     const speed = Math.abs(dx) / Math.max(1, performance.now() - d.t); // px/ms
@@ -254,7 +296,6 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
       : clampedPos > pages.length
         ? 'Fin'
         : `Página ${clampedPos} de ${pages.length}`;
-  const busy = !!flip;
 
   return (
     <div
@@ -280,29 +321,39 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
       </div>
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center gap-3 overflow-hidden px-2 pb-2 sm:px-6">
-        <RoundArrow label="Página anterior" disabled={clampedPos === 0 || busy} onClick={() => go(-1)}>
+        <RoundArrow label="Página anterior" disabled={clampedPos === 0} onClick={() => go(-1)}>
           <ArrowLeft className="size-6" />
         </RoundArrow>
         <div
           ref={bookRef}
           data-testid="book"
+          data-pos={clampedPos}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={() => {
             drag.current = null;
-            if (flip && flip.target === null) settle(flip, 0);
+            const f = flipRef.current;
+            if (f && f.target === null) settle(f, 0);
+          }}
+          onWheel={(e) => {
+            // Deslizar con dos dedos en el panel táctil del portátil.
+            if (Math.abs(e.deltaX) < 25 || Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;
+            const now = performance.now();
+            if (now - lastWheel.current < 450) return;
+            lastWheel.current = now;
+            go(e.deltaX > 0 ? 1 : -1);
           }}
           className={clsx('relative h-full max-h-[820px] w-full touch-pan-y select-none', spread ? 'max-w-[1180px]' : 'max-w-[560px]')}
         >
           {content}
         </div>
-        <RoundArrow label="Página siguiente" disabled={clampedPos >= steps - 1 || busy} onClick={() => go(1)}>
+        <RoundArrow label="Página siguiente" disabled={clampedPos >= steps - 1} onClick={() => go(1)}>
           <ArrowRight className="size-6" />
         </RoundArrow>
         {hint && steps > 1 && (
           <div className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 animate-pulse rounded-full bg-black/60 px-4 py-2 text-sm font-bold text-white">
-            👆 Arrastra la página o toca su borde para pasarla
+            👆 Desliza a un lado u otro, o toca la izquierda o la derecha
           </div>
         )}
       </div>
@@ -317,6 +368,8 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
           max={steps - 1}
           value={clampedPos}
           onChange={(e) => {
+            flipRef.current = null;
+            queued.current = null;
             setFlip(null);
             setHint(false);
             setPos(Number(e.target.value));
@@ -325,10 +378,10 @@ export function BookViewer({ group, pages, onClose }: { group: Group; pages: Boo
           className="mx-auto block w-full max-w-[1180px] accent-[#58cc02]"
         />
         <div className="mx-auto grid max-w-[1180px] grid-cols-2 gap-3 sm:hidden">
-          <Button variant="plain" size="lg" icon={<ArrowLeft className="size-5" />} disabled={clampedPos === 0 || busy} onClick={() => go(-1)}>
+          <Button variant="plain" size="lg" icon={<ArrowLeft className="size-5" />} disabled={clampedPos === 0} onClick={() => go(-1)}>
             Anterior
           </Button>
-          <Button size="lg" disabled={clampedPos >= steps - 1 || busy} onClick={() => go(1)}>
+          <Button size="lg" disabled={clampedPos >= steps - 1} onClick={() => go(1)}>
             Siguiente <ArrowRight className="size-5" />
           </Button>
         </div>
@@ -488,7 +541,7 @@ function Paper({ leaf, side, group, total }: { leaf: Leaf; side: 'left' | 'right
         <span className="truncate">{group.title}</span>
         {page.wordCount !== undefined && <span className="shrink-0">{formatNumber(page.wordCount)} pal.</span>}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 sm:px-10">
+      <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-6 py-4 sm:px-10">
         <p className="whitespace-pre-line font-serif text-base leading-relaxed text-eel sm:text-[17px]">
           {stripPageLabel(page.text, page.pageLabel ?? '') || <span className="font-sans text-hare">Página sin texto.</span>}
         </p>
