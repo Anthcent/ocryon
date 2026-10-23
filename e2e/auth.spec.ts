@@ -58,6 +58,14 @@ test.describe('Autenticación', () => {
     await expect(page.getByRole('button', { name: 'Recoger cortina informativa' })).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' })).toHaveAttribute('aria-expanded', 'false');
+    const box = await cord.boundingBox();
+    if (!box) throw new Error('La cuerda debe estar visible');
+    await page.mouse.move(box.x + box.width / 2, box.y + 70);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + 105, { steps: 6 });
+    await page.mouse.up();
+    await expect(page.getByRole('button', { name: 'Recoger cortina informativa' })).toHaveAttribute('aria-expanded', 'true');
+    await page.getByRole('button', { name: 'Cerrar información de BiblioTru' }).click();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
   });
 
