@@ -72,7 +72,7 @@ function renderBlock(block: Block): FileChild[] {
 }
 
 function titleBlock(model: ExportModel): FileChild[] {
-  const generated = `Generado con Ocryon el ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  const generated = `Generado con BiblioTru el ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`;
   const meta = model.meta.map(
     ([k, v]) =>
       new Paragraph({
@@ -102,7 +102,7 @@ function titleBlock(model: ExportModel): FileChild[] {
 
 export async function renderDocx(model: ExportModel): Promise<Blob> {
   const doc = new Document({
-    creator: 'Ocryon',
+    creator: 'BiblioTru',
     title: model.title,
     styles: {
       default: { document: { run: { font: 'Calibri', size: 22 } } },

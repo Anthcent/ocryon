@@ -1,6 +1,6 @@
 {
-  "name": "Ocryon",
-  "short_name": "Ocryon",
+  "name": "BiblioTru · Biblioteca Pública del Estado Trujillo",
+  "short_name": "BiblioTru",
   "description": "Escanea libros con la cámara y conviértelos en texto buscable.",
   "start_url": "/",
   "display": "standalone",

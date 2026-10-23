@@ -150,7 +150,7 @@ export function DocumentsPage() {
           >
             {debounced || template
               ? 'Prueba con otra palabra o quita el filtro.'
-              : 'Escanea facturas, recibos, DNI o contratos: Ocryon detecta los datos y los guarda en un formulario.'}
+              : 'Escanea facturas, recibos, DNI o contratos: BiblioTru detecta los datos y los guarda en un formulario.'}
           </EmptyState>
         </Card>
       ) : (

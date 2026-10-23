@@ -5,7 +5,7 @@ test.describe('Autenticación', () => {
   test('redirige al login sin sesión', async ({ page }) => {
     await page.goto('/catalogo');
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('heading', { name: '¡Hola de nuevo!' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tu biblioteca te espera.' })).toBeVisible();
   });
 
   test('registro, cierre de sesión e inicio de sesión', async ({ page }) => {
@@ -24,11 +24,11 @@ test.describe('Autenticación', () => {
 
     await page.getByPlaceholder('tucorreo@ejemplo.com').fill(email);
     await page.getByPlaceholder('••••••••').fill('clave-incorrecta');
-    await page.getByRole('button', { name: 'Entrar' }).click();
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
     await expect(page.getByText('Correo o contraseña incorrectos')).toBeVisible();
 
     await page.getByPlaceholder('••••••••').fill('secreto123');
-    await page.getByRole('button', { name: 'Entrar' }).click();
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
     await expect(page.getByRole('heading', { name: '¡Hola, Lucía!' })).toBeVisible();
 
     // La sesión sobrevive a una recarga.
@@ -46,6 +46,19 @@ test.describe('Autenticación', () => {
     await other.getByRole('button', { name: 'Crear cuenta' }).click();
     await expect(other.getByText('Ya existe una cuenta con ese correo')).toBeVisible();
     await other.close();
+  });
+
+  test('la cortina informativa móvil se abre y cierra sin desplazar el login', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.goto('/login');
+    const cord = page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' });
+    await expect(cord).toBeVisible();
+    await cord.click();
+    await expect(page.getByRole('heading', { name: 'Una biblioteca que va contigo.' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Recoger cortina informativa' })).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' })).toHaveAttribute('aria-expanded', 'false');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
   });
 
   test('la navegación se adapta al tamaño de pantalla', async ({ page }) => {

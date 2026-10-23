@@ -56,7 +56,7 @@ function renderBlock(block: Exclude<Block, { kind: 'pageBreak' }>): Content {
 }
 
 function titleBlock(model: ExportModel): Content[] {
-  const generated = `Generado con Ocryon el ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  const generated = `Generado con BiblioTru el ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}`;
   const align = model.cover ? 'center' : 'left';
   const meta: Content[] = model.meta.map(([k, v]) => ({ text: [{ text: `${k}: `, bold: true, color: MUTED }, v], alignment: align, margin: [0, 0, 0, 3] }));
   if (!model.cover) {
@@ -95,7 +95,7 @@ export async function renderPdf(model: ExportModel): Promise<Blob> {
     pageSize: 'A4',
     pageOrientation: model.landscape ? 'landscape' : 'portrait',
     pageMargins: [56, 60, 56, 56],
-    info: { title: model.title, creator: 'Ocryon', producer: 'Ocryon' },
+    info: { title: model.title, creator: 'BiblioTru', producer: 'BiblioTru' },
     header: (page) => (hideOnCover(page) || !model.header ? null : { text: model.header, alignment: 'right', fontSize: 8, color: MUTED, margin: [56, 26, 56, 0] }),
     footer: (page, pages) => (hideOnCover(page) ? null : { text: `Página ${page} de ${pages}`, alignment: 'center', fontSize: 8, color: MUTED, margin: [0, 22, 0, 0] }),
     // Un título no se queda solo al final de una hoja.

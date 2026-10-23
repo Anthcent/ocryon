@@ -18,7 +18,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <div className={clsx('flex items-center gap-2', className)}>
       <Mascot className="size-9" />
-      <span className="text-2xl font-black tracking-tight text-feather">ocryon</span>
+      <span className="text-2xl font-black tracking-tight text-feather">BiblioTru</span>
     </div>
   );
 }
