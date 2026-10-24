@@ -51,22 +51,37 @@ test.describe('Autenticación', () => {
   test('la cortina informativa móvil se abre y cierra sin desplazar el login', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 640 });
     await page.goto('/login');
-    const cord = page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' });
-    await expect(cord).toBeVisible();
-    await cord.click();
+    const tab = page.getByRole('button', { name: 'Descubrir BiblioTru' });
+    await expect(tab).toBeVisible();
+    await expect(page.locator('.auth-curtain-cord')).toHaveCount(0);
+    await tab.click();
     await expect(page.getByRole('heading', { name: 'Tus lecturas tienen un lugar.' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Recoger cortina informativa' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('button', { name: 'Cerrar información de BiblioTru' })).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' })).toHaveAttribute('aria-expanded', 'false');
-    const box = await cord.boundingBox();
-    if (!box) throw new Error('La cuerda debe estar visible');
-    await page.mouse.move(box.x + box.width / 2, box.y + 70);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2, box.y + 105, { steps: 6 });
-    await page.mouse.up();
-    await expect(page.getByRole('button', { name: 'Recoger cortina informativa' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(tab).toHaveAttribute('aria-expanded', 'false');
+    await tab.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Cerrar información de BiblioTru' })).toHaveAttribute('aria-expanded', 'true');
     await page.getByRole('button', { name: 'Cerrar información de BiblioTru' }).click();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  });
+
+  test('la pestaña cabe en pantallas pequeñas y respeta movimiento reducido', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto('/registro');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.getByRole('button', { name: 'Descubrir BiblioTru' }).click();
+    await expect.poll(() => page.evaluate(() => {
+      const content = document.querySelector('.auth-curtain-content')!.getBoundingClientRect();
+      const panel = document.querySelector('.auth-curtain')!.getBoundingClientRect();
+      return content.bottom <= panel.bottom;
+    })).toBe(true);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByRole('button', { name: 'Cerrar información de BiblioTru' }).click();
+    await expect(page.locator('.auth-curtain-invite svg')).toHaveCSS('animation-name', 'none');
   });
 
   test('la navegación se adapta al tamaño de pantalla', async ({ page }) => {
