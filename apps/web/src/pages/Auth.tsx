@@ -65,7 +65,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' | 'setup' }) {
             <Logo className="auth-brand" />
             <div className="auth-heading">
               <h1>{isLogin ? 'Tu biblioteca te espera.' : isSetup ? 'Configura el administrador.' : 'Crea tu cuenta.'}</h1>
-              <p>{isLogin ? 'Inicia sesión y sigue donde quedaste.' : isSetup ? 'Primer acceso: usa el código temporal mostrado en la consola del servidor.' : 'Tu cuenta deberá ser aprobada antes de entrar.'}</p>
+              <p>{isLogin ? 'Inicia sesión y sigue donde quedaste.' : isSetup ? 'Primer acceso: usa SETUP_TOKEN de Environment Settings o el código de la consola local.' : 'Tu cuenta deberá ser aprobada antes de entrar.'}</p>
             </div>
 
             {pending && !isLogin && !isSetup ? <p role="status">Registro enviado. Espera la aprobación de un operador o administrador.</p> : null}

@@ -39,7 +39,7 @@ export default defineConfig({
       env: {
         PORT: String(API_PORT),
         HOST: '127.0.0.1',
-        SETUP_TOKEN: 'e2e-setup-token',
+        SETUP_TOKEN: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         AUTH_RATE_LIMIT: '10000',
         // PostgreSQL embebido (PGlite) en una carpeta temporal: cada ejecución empieza de cero.
         DATA_DIR: path.join(os.tmpdir(), `ocryon-e2e-${Date.now()}`),

@@ -29,6 +29,16 @@ export const config = {
   sessionDays: 7,
   /** Intentos de login/registro permitidos por IP cada 15 minutos. */
   authRateLimit: Number(process.env.AUTH_RATE_LIMIT ?? 20),
+  // Explicit opt-in for first-admin setup through an HTTPS reverse proxy.
+  // The value must be generated with a CSPRNG (at least 24 random bytes as hex).
+  remoteSetupToken: (() => {
+    const value = process.env.SETUP_TOKEN?.trim();
+    if (!value) return undefined;
+    if (!/^[a-f0-9]{48,}$/i.test(value)) {
+      throw new Error('SETUP_TOKEN debe contener al menos 48 caracteres hexadecimales aleatorios.');
+    }
+    return value;
+  })(),
   /** Claves globales opcionales; cada usuario puede configurar las suyas desde Ajustes. */
   fallbackKeys: {
     ocrspace: process.env.OCRSPACE_API_KEY ?? '',

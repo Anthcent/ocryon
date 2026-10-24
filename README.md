@@ -48,14 +48,25 @@ npm run dev               # API en :3001 y web en http://localhost:5173
 
 ### Primer administrador y aprobaciones
 
-El sistema no trae credenciales de administrador. Antes de publicar una instalación nueva,
-arranca la API escuchando **solo** en `127.0.0.1` (`HOST=127.0.0.1`) y abre la web desde el mismo equipo.
-La primera pantalla permite crear el administrador con nombre, correo, contraseña y el **código temporal**
-que se imprime en la consola del servidor al iniciar (se genera de nuevo al reiniciar). El endpoint
-`/api/auth/setup-admin` rechaza conexiones externas y se cierra cuando existe un administrador;
-no intentes configurar la cuenta después de exponer el servidor en `0.0.0.0`.
-En Windows PowerShell: `$env:HOST='127.0.0.1'; npm run dev`. Tras crear la cuenta, detén el
-proceso y reinicia con la configuración de red habitual y la **misma base de datos**.
+El sistema no trae credenciales de administrador. Para configurar desde el mismo equipo,
+arranca la API escuchando **solo** en `127.0.0.1` (`HOST=127.0.0.1`) y abre la web localmente.
+La primera pantalla solicita nombre, correo, contraseña y el código temporal de la consola.
+En Windows PowerShell: `$env:HOST='127.0.0.1'; npm run dev`. Reinicia después con la
+configuración habitual y la **misma base de datos**.
+
+**Instalación pública en Docker con HTTPS:** genera un secreto aleatorio con
+`node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` y pon el resultado
+como `SETUP_TOKEN` en **Environment Settings de la aplicación** (no de la base de datos).
+Usa un valor hexadecimal de al menos 48 caracteres y no lo incluyas en Git ni en capturas.
+Mantén `HOST=0.0.0.0` y `LISTEN_PORT=8080` en Docker; conserva `DATABASE_URL` para que el Admin
+persista entre despliegues. Despliega la versión actual, visita tu dominio **https://** e introduce
+el mismo código en «Configurar administrador», junto con nombre, correo y contraseña propios.
+El endpoint remoto está deshabilitado si falta `SETUP_TOKEN` o la solicitud no llega por HTTPS.
+El proxy debe terminar TLS, sobrescribir `X-Forwarded-Proto` con el esquema real y no publicar
+directamente el puerto 8080: el servidor también comprueba que `Origin` sea HTTPS y coincida
+con el host público. Si tu proxy no envía `X-Forwarded-Proto: https`, el alta se rechazará.
+Al crear el primer Admin, nuevas altas de Admin quedan bloqueadas en la base de datos. **Retira
+`SETUP_TOKEN` del panel y vuelve a desplegar**, manteniendo la misma base de datos.
 
 Los nuevos registros deben indicar sala y quedan pendientes. Admin y Operador pueden aprobar
 o rechazar desde Administración. Solo Admin puede designar Operador y borrar datos de otros.
@@ -110,6 +121,7 @@ Variables de entorno (se configuran en el panel del servidor, nunca en Git):
 | `ENCRYPTION_KEY` | Recomendada | Cifra las API keys guardadas. Mínimo 16 caracteres. Si falta, se genera y se guarda en la base de datos (más seguro definirla aparte). **No la cambies después**: las claves ya guardadas dejarían de poder leerse. |
 | `OCRSPACE_API_KEY`, `GEMINI_API_KEY` | No | Claves globales para los usuarios que no pongan las suyas. |
 | `AUTH_RATE_LIMIT` | No | Intentos de login/registro por IP cada 15 min (20 por defecto). |
+| `SETUP_TOKEN` | Temporal | Código hexadecimal aleatorio de 48+ caracteres. Habilita configurar el primer Admin mediante HTTPS. Retíralo después. |
 
 La imagen escucha siempre en `0.0.0.0:8080` (`LISTEN_PORT=8080`), aunque la plataforma inyecte otro `PORT`. Si PostgreSQL tarda en arrancar, la app reintenta la conexión durante unos dos minutos.
 

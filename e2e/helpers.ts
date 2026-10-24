@@ -6,6 +6,7 @@ export const pageImage = (n: number) => path.join(FIXTURES, `pagina-${n}.png`);
 export const BAD_IMAGE = path.join(FIXTURES, 'no-es-imagen.png');
 
 const HEADERS = { 'X-Requested-With': 'ocryon' };
+const SETUP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 let seq = 0;
 
 /** Crea un usuario nuevo por API (la cookie de sesión queda en el contexto del navegador). */
@@ -23,7 +24,7 @@ export async function signUp(page: Page, name = 'Ana Prueba') {
 export async function approveUser(page: Page, email: string) {
   const admin = await request.newContext({ baseURL: 'http://localhost:5174' });
   try {
-    const credentials = { name: 'Administrador', email: 'admin-e2e@example.com', password: 'secreto123', setupToken: 'e2e-setup-token' };
+    const credentials = { name: 'Administrador', email: 'admin-e2e@example.com', password: 'secreto123', setupToken: SETUP_TOKEN };
     const setup = await admin.post('/api/auth/setup-admin', { headers: HEADERS, data: credentials });
     if (setup.status() !== 201 && setup.status() !== 409) throw new Error(`Setup admin: ${setup.status()}`);
     await admin.post('/api/auth/login', { headers: HEADERS, data: credentials });
@@ -39,7 +40,7 @@ export async function ensureAdmin(page: Page) {
   const admin = await request.newContext({ baseURL: 'http://localhost:5174' });
   try {
     await admin.post('/api/auth/setup-admin', { headers: HEADERS,
-      data: { name: 'Administrador', email: 'admin-e2e@example.com', password: 'secreto123', setupToken: 'e2e-setup-token' } });
+      data: { name: 'Administrador', email: 'admin-e2e@example.com', password: 'secreto123', setupToken: SETUP_TOKEN } });
   } finally { await admin.dispose(); }
 }
 

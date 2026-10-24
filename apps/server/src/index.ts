@@ -7,9 +7,10 @@ import { randomBytes } from 'node:crypto';
 
 // Aplica las migraciones pendientes antes de aceptar tráfico.
 const db = await openDatabase({ url: config.databaseUrl, dataDir: config.dataDir });
-const setupToken = process.env.SETUP_TOKEN ?? randomBytes(24).toString('hex');
+const setupToken = config.remoteSetupToken ?? randomBytes(24).toString('hex');
 if (!(await db.one('SELECT 1 FROM users WHERE role = ?', ['admin']))) {
-  console.log(`Código temporal para crear administrador: ${setupToken}`);
+  if (config.remoteSetupToken) console.log('Configuración inicial por HTTPS habilitada con SETUP_TOKEN. Retira la variable tras crear el administrador.');
+  else console.log(`Código temporal para crear administrador desde localhost: ${setupToken}`);
 }
 console.log(config.databaseUrl ? 'Base de datos: PostgreSQL (DATABASE_URL)' : `Base de datos: PGlite en ${config.dataDir}`);
 const app = createApp(
@@ -18,6 +19,7 @@ const app = createApp(
     cipher: createCipher(await resolveSecret(db, 'ENCRYPTION_KEY', config.encryptionKey)),
     jwtSecret: await resolveSecret(db, 'JWT_SECRET', config.jwtSecret),
     setupToken,
+    allowRemoteSetup: Boolean(config.remoteSetupToken),
     secureCookies: config.isProduction,
     fallbackKeys: config.fallbackKeys,
   },

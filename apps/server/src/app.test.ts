@@ -22,12 +22,13 @@ beforeEach(async () => {
   await db.run('TRUNCATE users, groups, scans, analyses, doc_templates, documents, settings RESTART IDENTITY CASCADE');
 });
 
-function setup() {
+function setup(options: { allowRemoteSetup?: boolean; setupToken?: string } = {}) {
   const app = createApp({
     db,
     cipher: createCipher('test-secret-key-123456'),
     jwtSecret: 'test-jwt-secret-123456',
-    setupToken: 'test-setup-token',
+    setupToken: options.setupToken ?? 'test-setup-token',
+    allowRemoteSetup: options.allowRemoteSetup,
     secureCookies: false,
     fallbackKeys: { ocrspace: '', gemini: '' },
   });
@@ -45,6 +46,29 @@ async function registered(email = 'ana@example.com') {
 }
 
 describe('auth', () => {
+  it('permite configurar Admin públicamente solo con token explícito y HTTPS', async () => {
+    const secret = 'a'.repeat(64);
+    const disabled = setup({ setupToken: secret });
+    const data = { name: 'Admin', email: 'admin@example.com', password: 'secreto123', setupToken: secret };
+    const httpsHeaders = { Host: 'library.example.org', Origin: 'https://library.example.org', 'X-Forwarded-Proto': 'https' };
+    await disabled.post('/api/auth/setup-admin', data).set(httpsHeaders).expect(403);
+
+    const enabled = setup({ allowRemoteSetup: true, setupToken: secret });
+    await enabled.post('/api/auth/setup-admin', data).expect(403);
+    await enabled.post('/api/auth/setup-admin', data)
+      .set({ ...httpsHeaders, Origin: 'http://library.example.org' }).expect(403);
+    await enabled.post('/api/auth/setup-admin', data)
+      .set({ ...httpsHeaders, Origin: 'https://other.example.org' }).expect(403);
+    await enabled.post('/api/auth/setup-admin', data)
+      .set({ Host: httpsHeaders.Host, 'X-Forwarded-Proto': 'https' }).expect(403);
+    await enabled.post('/api/auth/setup-admin', { ...data, setupToken: 'b'.repeat(64) })
+      .set(httpsHeaders).expect(403);
+    const created = await enabled.post('/api/auth/setup-admin', data).set(httpsHeaders).expect(201);
+    expect(created.body.user).toMatchObject({ email: data.email, role: 'admin', status: 'approved' });
+    await enabled.post('/api/auth/setup-admin', { ...data, email: 'other@example.com' })
+      .set(httpsHeaders).expect(409);
+  });
+
   it('solo permite crear una cuenta administradora inicial desde localhost', async () => {
     const { agent, post } = setup();
     await agent.get('/api/auth/setup-status').expect(200, { needsSetup: true });

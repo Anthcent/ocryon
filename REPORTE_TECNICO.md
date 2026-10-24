@@ -35,7 +35,7 @@ El monorepositorio usa npm workspaces: `apps/web` contiene la SPA y `apps/server
 
 ### Uso cotidiano
 
-1. En instalación nueva, configurar el primer Admin desde localhost con el código temporal de la consola. Personal indica su sala al registrarse y espera aprobación de Admin u Operador antes de iniciar sesión.
+1. En instalación nueva, configurar el primer Admin desde localhost con código de la consola o, en Docker público, mediante HTTPS y `SETUP_TOKEN` aleatorio configurado temporalmente. Personal indica su sala al registrarse y espera aprobación de Admin u Operador antes de iniciar sesión.
 2. Elegir destino: libro/grupo o escaneo individual; seleccionar motor, idioma y modo automático o manual.
 3. Tomar fotos o cargar imágenes; reordenar, girar o quitar páginas si hace falta.
 4. Esperar el OCR, revisar el texto y corregir errores manualmente. Se puede reintentar una página.
@@ -97,7 +97,7 @@ Contraseñas se almacenan con bcrypt; la sesión utiliza JWT en cookie `httpOnly
 
 ### Roles y aprobación
 
-La instalación no incluye credenciales predefinidas. El primer Admin se crea mediante un código temporal generado al iniciar, únicamente con la API escuchando en localhost. Después el registro público crea cuentas de Personal pendientes con sala. Admin y Operador pueden aprobar o rechazar; Operador puede consultar archivo y reportes globales, pero sus peticiones DELETE se bloquean en servidor. Admin puede designar operadores y borrar registros del archivo institucional. Las rutas normales de Personal siguen filtrando por `user_id`; la lectura global requiere el módulo administrativo protegido por rol. Una suspensión revoca acceso en cada petición porque la API consulta el estado actualizado de la cuenta.
+La instalación no incluye credenciales predefinidas. El primer Admin se crea localmente con el código temporal de la consola o públicamente solo cuando se configura explícitamente un `SETUP_TOKEN` fuerte y la solicitud llega por HTTPS. Después de crear Admin, la transacción impide nuevas altas iniciales; se recomienda quitar `SETUP_TOKEN` y redesplegar. El registro público crea cuentas de Personal pendientes con sala. Admin y Operador pueden aprobar o rechazar; Operador puede consultar archivo y reportes globales, pero sus peticiones DELETE se bloquean en servidor. Admin puede designar operadores y borrar registros del archivo institucional. Las rutas normales de Personal siguen filtrando por `user_id`; la lectura global requiere el módulo administrativo protegido por rol. Una suspensión revoca acceso en cada petición porque la API consulta el estado actualizado de la cuenta.
 
 ## Cómo desarrollar y verificar
 

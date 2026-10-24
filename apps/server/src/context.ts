@@ -6,6 +6,7 @@ export interface AppContext {
   cipher: Cipher;
   jwtSecret: string;
   setupToken: string;
+  allowRemoteSetup?: boolean;
   secureCookies: boolean;
   fallbackKeys: { ocrspace: string; gemini: string };
 }

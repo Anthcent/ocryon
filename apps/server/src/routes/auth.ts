@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { timingSafeEqual } from 'node:crypto';
 import { Router, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
@@ -48,12 +49,29 @@ export function authRouter(ctx: AppContext) {
     res.json({ needsSetup: await setupAvailable() });
   });
   router.post('/setup-admin', limiter, async (req, res) => {
-    // Never expose bootstrap on a public listener, even behind a reverse proxy.
+    // Local bootstrap remains available without external configuration. Public bootstrap
+    // requires an explicitly supplied high-entropy token and HTTPS from the proxy.
     const local = ['127.0.0.1', '::1'].includes(config.host) &&
       ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
-    if (!local) throw new HttpError(403, 'Configura el administrador desde localhost antes de publicar', 'setup_local_only');
+    // Browser POSTs include Origin. Require HTTPS at both the browser and the
+    // trusted reverse proxy; X-Forwarded-Proto alone can be forged on HTTP.
+    const origin = req.get('origin');
+    let secureOrigin = false;
+    if (origin) {
+      try {
+        const parsed = new URL(origin);
+        secureOrigin = parsed.protocol === 'https:' && parsed.host === req.get('host');
+      } catch { /* Invalid origins are rejected below. */ }
+    }
+    if (!local && !(ctx.allowRemoteSetup && req.secure && secureOrigin)) {
+      throw new HttpError(403, 'Configura SETUP_TOKEN y accede por HTTPS para crear el administrador', 'setup_unavailable');
+    }
     const data = registerSchema.omit({ room: true }).extend({ setupToken: z.string() }).parse(req.body);
-    if (data.setupToken !== ctx.setupToken) throw new HttpError(403, 'Código de instalación incorrecto', 'invalid_setup_token');
+    const expected = Buffer.from(ctx.setupToken);
+    const supplied = Buffer.from(data.setupToken);
+    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) {
+      throw new HttpError(403, 'Código de instalación incorrecto', 'invalid_setup_token');
+    }
     const hash = await bcrypt.hash(data.password, 12);
     const user = await ctx.db.transaction(async (tx) => {
       // Transaction-scoped advisory lock prevents simultaneous first-admin claims.
