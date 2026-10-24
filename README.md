@@ -46,6 +46,23 @@ cp .env.example .env      # opcional en desarrollo
 npm run dev               # API en :3001 y web en http://localhost:5173
 ```
 
+### Primer administrador y aprobaciones
+
+El sistema no trae credenciales de administrador. Antes de publicar una instalación nueva,
+arranca la API escuchando **solo** en `127.0.0.1` (`HOST=127.0.0.1`) y abre la web desde el mismo equipo.
+La primera pantalla permite crear el administrador con nombre, correo, contraseña y el **código temporal**
+que se imprime en la consola del servidor al iniciar (se genera de nuevo al reiniciar). El endpoint
+`/api/auth/setup-admin` rechaza conexiones externas y se cierra cuando existe un administrador;
+no intentes configurar la cuenta después de exponer el servidor en `0.0.0.0`.
+En Windows PowerShell: `$env:HOST='127.0.0.1'; npm run dev`. Tras crear la cuenta, detén el
+proceso y reinicia con la configuración de red habitual y la **misma base de datos**.
+
+Los nuevos registros deben indicar sala y quedan pendientes. Admin y Operador pueden aprobar
+o rechazar desde Administración. Solo Admin puede designar Operador y borrar datos de otros.
+Personal conserva acceso exclusivo a sus propias páginas y documentos. Si una instalación previa
+ya tiene usuarios, la migración los deja pendientes: configura el primer administrador en modo
+local y apruébalos desde Administración. No se eliminan datos existentes automáticamente.
+
 Para probar la cámara desde el móvil en la misma red Wi-Fi, el navegador exige HTTPS:
 
 ```bash

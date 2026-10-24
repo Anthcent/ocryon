@@ -101,6 +101,7 @@ export function Layout() {
               {label}
             </NavLink>
           ))}
+          {user?.role !== 'personal' && <NavLink to="/administracion" className="rounded-xl p-3 font-extrabold text-feather-dark">Administración</NavLink>}
         </nav>
 
         {/* Libro en el que se trabajó por última vez */}
@@ -124,6 +125,7 @@ export function Layout() {
       <header className="sticky top-0 z-30 border-b-2 border-swan bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:px-6 lg:h-16">
           <Logo className="lg:hidden" />
+          {user?.role !== 'personal' && <Link to="/administracion" className="text-xs font-bold text-feather-dark lg:hidden">Administración</Link>}
           <div className="ml-auto flex items-center gap-1 sm:gap-2" data-testid="top-stats">
             {pendingPages > 0 && (
               <Link

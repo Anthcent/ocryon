@@ -13,6 +13,7 @@ const registerSchema = z.object({
   name: z.string().trim().min(2, 'Escribe tu nombre').max(80),
   email: z.email('Correo no válido').trim().toLowerCase(),
   password,
+  room: z.string().trim().min(2, 'Indica tu sala').max(100),
 });
 
 const loginSchema = z.object({
@@ -42,6 +43,34 @@ export function authRouter(ctx: AppContext) {
     });
   };
 
+  const setupAvailable = async () => !(await ctx.db.one('SELECT 1 FROM users WHERE role = ?', ['admin']));
+  router.get('/setup-status', async (_req, res) => {
+    res.json({ needsSetup: await setupAvailable() });
+  });
+  router.post('/setup-admin', limiter, async (req, res) => {
+    // Never expose bootstrap on a public listener, even behind a reverse proxy.
+    const local = ['127.0.0.1', '::1'].includes(config.host) &&
+      ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+    if (!local) throw new HttpError(403, 'Configura el administrador desde localhost antes de publicar', 'setup_local_only');
+    const data = registerSchema.omit({ room: true }).extend({ setupToken: z.string() }).parse(req.body);
+    if (data.setupToken !== ctx.setupToken) throw new HttpError(403, 'Código de instalación incorrecto', 'invalid_setup_token');
+    const hash = await bcrypt.hash(data.password, 12);
+    const user = await ctx.db.transaction(async (tx) => {
+      // Transaction-scoped advisory lock prevents simultaneous first-admin claims.
+      await tx.one('SELECT pg_advisory_xact_lock(20540917)');
+      if (await tx.one('SELECT 1 FROM users WHERE role = ?', ['admin'])) throw new HttpError(409, 'El administrador ya fue configurado', 'setup_complete');
+      if (await tx.one('SELECT 1 FROM users WHERE email = ?', [data.email])) throw new HttpError(409, 'Ya existe una cuenta con ese correo', 'email_taken');
+      const created = (await tx.one<SessionUser>(
+        `INSERT INTO users (email, name, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'approved')
+         RETURNING id, email, name, role, status, room`, [data.email, data.name, hash],
+      ))!;
+      await tx.run('INSERT INTO settings (user_id) VALUES (?)', [created.id]);
+      return created;
+    });
+    setSession(res, user);
+    res.status(201).json({ user });
+  });
+
   router.post('/register', limiter, async (req, res) => {
     const data = registerSchema.parse(req.body);
     const taken = new HttpError(409, 'Ya existe una cuenta con ese correo', 'email_taken');
@@ -50,8 +79,8 @@ export function authRouter(ctx: AppContext) {
     const user = await ctx.db
       .transaction(async (tx) => {
         const created = (await tx.one<SessionUser>(
-          'INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?) RETURNING id, email, name',
-          [data.email, data.name, hash],
+          'INSERT INTO users (email, name, password_hash, room) VALUES (?, ?, ?, ?) RETURNING id, email, name, role, status, room',
+          [data.email, data.name, hash, data.room],
         ))!;
         await tx.run('INSERT INTO settings (user_id) VALUES (?)', [created.id]);
         return created;
@@ -61,20 +90,20 @@ export function authRouter(ctx: AppContext) {
         if (isUniqueViolation(err)) throw taken;
         throw err;
       });
-    setSession(res, user);
     res.status(201).json({ user });
   });
 
   router.post('/login', limiter, async (req, res) => {
     const data = loginSchema.parse(req.body);
     const row = await ctx.db.one<SessionUser & { password_hash: string }>(
-      'SELECT id, email, name, password_hash FROM users WHERE email = ?',
+      'SELECT id, email, name, role, status, room, password_hash FROM users WHERE email = ?',
       [data.email],
     );
     // Comparamos siempre para no revelar por tiempo de respuesta si el correo existe.
     const ok = await bcrypt.compare(data.password, row?.password_hash ?? '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv');
     if (!row || !ok) throw new HttpError(401, 'Correo o contraseña incorrectos', 'invalid_credentials');
-    const user = { id: row.id, email: row.email, name: row.name };
+    if (row.status !== 'approved') throw new HttpError(403, 'Tu cuenta espera aprobación o fue suspendida', 'account_not_approved');
+    const user = { id: row.id, email: row.email, name: row.name, role: row.role, status: row.status, room: row.room };
     setSession(res, user);
     res.json({ user });
   });

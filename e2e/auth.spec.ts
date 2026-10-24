@@ -1,20 +1,29 @@
 import { expect, test } from '@playwright/test';
-import { isMobile, signUp } from './helpers';
+import { approveUser, ensureAdmin, isMobile, signUp } from './helpers';
 
 test.describe('Autenticación', () => {
   test('redirige al login sin sesión', async ({ page }) => {
+    await ensureAdmin(page);
     await page.goto('/catalogo');
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('heading', { name: 'Tu biblioteca te espera.' })).toBeVisible();
   });
 
   test('registro, cierre de sesión e inicio de sesión', async ({ page }) => {
+    await ensureAdmin(page);
     const email = `e2e-ui-${Date.now()}@example.com`;
     await page.goto('/registro');
     await page.getByPlaceholder('Tu nombre').fill('Lucía');
+    await page.getByPlaceholder('Nombre de la sala').fill('Sala General');
     await page.getByPlaceholder('tucorreo@ejemplo.com').fill(email);
     await page.getByPlaceholder('••••••••').fill('secreto123');
-    await page.getByRole('button', { name: 'Crear cuenta' }).click();
+    await page.getByRole('button', { name: 'Solicitar acceso' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Espera la aprobación' })).toBeVisible();
+    await approveUser(page, email);
+    await page.goto('/login');
+    await page.getByPlaceholder('tucorreo@ejemplo.com').fill(email);
+    await page.getByPlaceholder('••••••••').fill('secreto123');
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
     await expect(page.getByRole('heading', { name: '¡Hola, Lucía!' })).toBeVisible();
 
     // Cerrar sesión desde Ajustes (disponible en móvil y escritorio).
@@ -41,14 +50,16 @@ test.describe('Autenticación', () => {
     const other = await browser.newPage();
     await other.goto('/registro');
     await other.getByPlaceholder('Tu nombre').fill('Otra');
+    await other.getByPlaceholder('Nombre de la sala').fill('Sala General');
     await other.getByPlaceholder('tucorreo@ejemplo.com').fill(user.email);
     await other.getByPlaceholder('••••••••').fill('secreto123');
-    await other.getByRole('button', { name: 'Crear cuenta' }).click();
+    await other.getByRole('button', { name: 'Solicitar acceso' }).click();
     await expect(other.getByText('Ya existe una cuenta con ese correo')).toBeVisible();
     await other.close();
   });
 
   test('la cortina informativa móvil se abre y cierra sin desplazar el login', async ({ page }) => {
+    await ensureAdmin(page);
     await page.setViewportSize({ width: 360, height: 640 });
     await page.goto('/login');
     const tab = page.getByRole('button', { name: 'Descubrir BiblioTru' });
@@ -67,9 +78,10 @@ test.describe('Autenticación', () => {
   });
 
   test('la pestaña cabe en pantallas pequeñas y respeta movimiento reducido', async ({ page }) => {
+    await ensureAdmin(page);
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto('/registro');
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+    await expect(page.getByRole('button', { name: 'Solicitar acceso' })).toBeVisible();
 
     await page.setViewportSize({ width: 320, height: 480 });
     await page.getByRole('button', { name: 'Descubrir BiblioTru' }).click();

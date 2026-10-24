@@ -5,6 +5,7 @@ import { FeedbackProvider } from './components/feedback';
 import { Layout } from './components/Layout';
 import { PageLoader } from './components/ui';
 import { AuthPage } from './pages/Auth';
+import { AdministrationPage } from './pages/Administration';
 import { CatalogPage } from './pages/Catalog';
 import { DocumentDetailPage } from './pages/DocumentDetail';
 import { DocumentNewPage } from './pages/DocumentNew';
@@ -34,6 +35,7 @@ function PrivateApp() {
       <SessionWithDefaults>
         <Routes>
           <Route element={<Layout />}>
+            <Route path="administracion" element={<AdministrationPage />} />
             <Route index element={<HomePage />} />
             <Route path="escanear" element={<ScannerPage />} />
             <Route path="catalogo" element={<CatalogPage />} />
@@ -53,8 +55,10 @@ function PrivateApp() {
 }
 
 function Root() {
-  const { user, loading } = useAuth();
+  const { user, loading, needsSetup } = useAuth();
   if (loading) return <PageLoader />;
+
+  if (needsSetup && !user) return <AuthPage mode="setup" />;
 
   if (!user) {
     return (

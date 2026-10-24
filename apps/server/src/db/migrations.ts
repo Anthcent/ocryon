@@ -108,4 +108,13 @@ export const migrations: string[] = [
     created_at timestamptz NOT NULL DEFAULT now()
   );
   `,
+  /* sql */ `
+  ALTER TABLE users ADD COLUMN role text NOT NULL DEFAULT 'personal' CHECK (role IN ('admin', 'operator', 'personal'));
+  ALTER TABLE users ADD COLUMN status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'suspended'));
+  ALTER TABLE users ADD COLUMN room text NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN reviewed_at timestamptz;
+  ALTER TABLE users ADD COLUMN reviewed_by integer REFERENCES users(id) ON DELETE SET NULL;
+  CREATE INDEX idx_users_status ON users(status, created_at DESC);
+  CREATE INDEX idx_users_room ON users(room);
+  `,
 ];

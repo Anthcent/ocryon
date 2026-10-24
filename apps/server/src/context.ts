@@ -5,6 +5,7 @@ export interface AppContext {
   db: Database;
   cipher: Cipher;
   jwtSecret: string;
+  setupToken: string;
   secureCookies: boolean;
   fallbackKeys: { ocrspace: string; gemini: string };
 }

@@ -9,6 +9,9 @@ export interface SessionUser {
   id: number;
   email: string;
   name: string;
+  role: 'admin' | 'operator' | 'personal';
+  status: 'pending' | 'approved' | 'rejected' | 'suspended';
+  room: string;
 }
 
 declare global {
@@ -34,14 +37,22 @@ export function requireAuth(ctx: AppContext) {
       return next(new HttpError(401, 'Tu sesión expiró, vuelve a iniciar sesión', 'unauthenticated'));
     }
     try {
-      const user = await ctx.db.one<SessionUser>('SELECT id, email, name FROM users WHERE id = ?', [userId]);
+      const user = await ctx.db.one<SessionUser>('SELECT id, email, name, role, status, room FROM users WHERE id = ?', [userId]);
       if (!user) return next(new HttpError(401, 'Tu sesión expiró, vuelve a iniciar sesión', 'unauthenticated'));
+      if (user.status !== 'approved') return next(new HttpError(403, 'Tu cuenta todavía no tiene acceso', 'account_not_approved'));
       req.user = user;
       next();
     } catch (err) {
       // Un fallo de la base de datos no es un problema de sesión: que lo gestione el manejador de errores.
       next(err);
     }
+  };
+}
+
+export function requireRole(...roles: SessionUser['role'][]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!roles.includes(currentUser(req).role)) return next(new HttpError(403, 'No tienes permiso para esta operación', 'forbidden'));
+    next();
   };
 }
 

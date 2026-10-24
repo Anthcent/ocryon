@@ -4,6 +4,7 @@ import path from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
+import { config } from './config.js';
 import { openDatabase, toPositional, type Database } from './db/index.js';
 import { migrations } from './db/migrations.js';
 import { createCipher } from './lib/crypto.js';
@@ -26,6 +27,7 @@ function setup() {
     db,
     cipher: createCipher('test-secret-key-123456'),
     jwtSecret: 'test-jwt-secret-123456',
+    setupToken: 'test-setup-token',
     secureCookies: false,
     fallbackKeys: { ocrspace: '', gemini: '' },
   });
@@ -36,11 +38,60 @@ function setup() {
 
 async function registered(email = 'ana@example.com') {
   const s = setup();
-  await s.post('/api/auth/register', { name: 'Ana', email, password: 'secreto123' }).expect(201);
+  await s.post('/api/auth/register', { name: 'Ana', email, password: 'secreto123', room: 'Sala General' }).expect(201);
+  await db.run("UPDATE users SET status = 'approved' WHERE email = ?", [email]);
+  await s.post('/api/auth/login', { email, password: 'secreto123' }).expect(200);
   return s;
 }
 
 describe('auth', () => {
+  it('solo permite crear una cuenta administradora inicial desde localhost', async () => {
+    const { agent, post } = setup();
+    await agent.get('/api/auth/setup-status').expect(200, { needsSetup: true });
+    await post('/api/auth/setup-admin', { name: 'Admin', email: 'admin@example.com', password: 'secreto123', setupToken: 'test-setup-token' }).expect(403);
+    const previous = config.host;
+    config.host = '127.0.0.1';
+    try {
+      await post('/api/auth/setup-admin', { name: 'Admin', email: 'admin@example.com', password: 'secreto123', setupToken: 'wrong' }).expect(403);
+      const res = await post('/api/auth/setup-admin', { name: 'Admin', email: 'admin@example.com', password: 'secreto123', setupToken: 'test-setup-token' }).expect(201);
+      expect(res.body.user.role).toBe('admin');
+      await post('/api/auth/setup-admin', { name: 'Otro', email: 'otro@example.com', password: 'secreto123', setupToken: 'test-setup-token' }).expect(409);
+      await agent.get('/api/auth/setup-status').expect(200, { needsSetup: false });
+    } finally { config.host = previous; }
+  });
+
+  it('mantiene cuentas nuevas pendientes hasta aprobación', async () => {
+    const { agent, post } = setup();
+    await post('/api/auth/register', { name: 'Ana', email: 'ana@example.com', password: 'secreto123', room: 'Sala Norte' }).expect(201);
+    await post('/api/auth/login', { email: 'ana@example.com', password: 'secreto123' }).expect(403);
+    await agent.get('/api/groups').expect(401);
+  });
+
+  it('admin y operador ven archivo, operador aprueba pero no borra', async () => {
+    const personal = await registered();
+    const scan = await personal.post('/api/scans', { items: [{ text: 'Lectura de sala', engine: 'manual' }] }).expect(201);
+    await personal.agent.get('/api/administration/reports').expect(403);
+
+    const admin = setup();
+    await admin.post('/api/auth/register', { name: 'Responsable', email: 'admin@example.com', password: 'secreto123', room: 'Dirección' }).expect(201);
+    await db.run("UPDATE users SET role = 'admin', status = 'approved' WHERE email = ?", ['admin@example.com']);
+    await admin.post('/api/auth/login', { email: 'admin@example.com', password: 'secreto123' }).expect(200);
+    const report = await admin.agent.get('/api/administration/reports').expect(200);
+    expect(Number(report.body.totals.pages)).toBe(1);
+    const archive = await admin.agent.get('/api/administration/archive').expect(200);
+    expect(archive.body.scans[0].text).toBe('Lectura de sala');
+
+    const operator = setup();
+    await operator.post('/api/auth/register', { name: 'Operador', email: 'op@example.com', password: 'secreto123', room: 'Dirección' }).expect(201);
+    await db.run("UPDATE users SET role = 'operator', status = 'approved' WHERE email = ?", ['op@example.com']);
+    await operator.post('/api/auth/login', { email: 'op@example.com', password: 'secreto123' }).expect(200);
+    const pending = setup();
+    await pending.post('/api/auth/register', { name: 'Nuevo', email: 'new@example.com', password: 'secreto123', room: 'Sala Norte' }).expect(201);
+    const person = await db.one<{ id: number }>('SELECT id FROM users WHERE email = ?', ['new@example.com']);
+    await operator.agent.patch(`/api/administration/users/${person!.id}/status`).set('X-Requested-With', 'ocryon').send({ status: 'approved' }).expect(200);
+    await operator.agent.delete(`/api/administration/scans/${scan.body.ids[0]}`).set('X-Requested-With', 'ocryon').expect(403);
+    await admin.agent.delete(`/api/administration/scans/${scan.body.ids[0]}`).set('X-Requested-With', 'ocryon').expect(204);
+  }, 15_000);
   it('registra, mantiene la sesión y cierra sesión', async () => {
     const { agent, post } = await registered();
     const me = await agent.get('/api/auth/me').expect(200);
@@ -50,7 +101,7 @@ describe('auth', () => {
 
   it('rechaza correo duplicado y credenciales incorrectas', async () => {
     const { post } = await registered();
-    await post('/api/auth/register', { name: 'Ana', email: 'ANA@example.com', password: 'secreto123' }).expect(409);
+    await post('/api/auth/register', { name: 'Ana', email: 'ANA@example.com', password: 'secreto123', room: 'Sala General' }).expect(409);
     await post('/api/auth/login', { email: 'ana@example.com', password: 'otra-clave' }).expect(401);
     await post('/api/auth/login', { email: 'ana@example.com', password: 'secreto123' }).expect(200);
   });
@@ -146,7 +197,9 @@ describe('escaneos, grupos y búsqueda', () => {
     const saved = await a.post('/api/scans', { items: [{ text: 'secreto de A', engine: 'manual' }] }).expect(201);
     const { app } = a;
     const b = request.agent(app);
-    await b.post('/api/auth/register').set('X-Requested-With', 'ocryon').send({ name: 'Bea', email: 'b@example.com', password: 'secreto123' }).expect(201);
+    await b.post('/api/auth/register').set('X-Requested-With', 'ocryon').send({ name: 'Bea', email: 'b@example.com', password: 'secreto123', room: 'Sala General' }).expect(201);
+    await db.run("UPDATE users SET status = 'approved' WHERE email = ?", ['b@example.com']);
+    await b.post('/api/auth/login').set('X-Requested-With', 'ocryon').send({ email: 'b@example.com', password: 'secreto123' }).expect(200);
     await b.get(`/api/scans/${saved.body.ids[0]}`).expect(404);
     expect((await b.get('/api/search').query({ q: 'secreto' })).body.results).toHaveLength(0);
   });
@@ -288,7 +341,9 @@ describe('documentos', () => {
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const { body } = created;
     const b = request.agent(a.app);
-    await b.post('/api/auth/register').set('X-Requested-With', 'ocryon').send({ name: 'Beto', email: 'doc-b@example.com', password: 'secreto123' }).expect(201);
+    await b.post('/api/auth/register').set('X-Requested-With', 'ocryon').send({ name: 'Beto', email: 'doc-b@example.com', password: 'secreto123', room: 'Sala General' }).expect(201);
+    await db.run("UPDATE users SET status = 'approved' WHERE email = ?", ['doc-b@example.com']);
+    await b.post('/api/auth/login').set('X-Requested-With', 'ocryon').send({ email: 'doc-b@example.com', password: 'secreto123' }).expect(200);
     await b.get(`/api/documents/${body.document.id}`).expect(404);
     expect((await b.get('/api/documents')).body.documents).toHaveLength(0);
   });

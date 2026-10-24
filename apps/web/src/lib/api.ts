@@ -83,13 +83,28 @@ const qs = (params: Record<string, string | number | undefined>) => {
 
 export const api = {
   auth: {
+    setupStatus: () => request<{ needsSetup: boolean }>('/auth/setup-status'),
+    setupAdmin: (name: string, email: string, password: string, setupToken: string) =>
+      request<{ user: User }>('/auth/setup-admin', { method: 'POST', json: { name, email, password, setupToken } }),
     me: () => request<{ user: User }>('/auth/me'),
     login: (email: string, password: string) => request<{ user: User }>('/auth/login', { method: 'POST', json: { email, password } }),
-    register: (name: string, email: string, password: string) =>
-      request<{ user: User }>('/auth/register', { method: 'POST', json: { name, email, password } }),
+    register: (name: string, email: string, password: string, room: string) =>
+      request<{ user: User }>('/auth/register', { method: 'POST', json: { name, email, password, room } }),
     logout: () => request<void>('/auth/logout', { method: 'POST' }),
     changePassword: (currentPassword: string, newPassword: string) =>
       request<void>('/auth/change-password', { method: 'POST', json: { currentPassword, newPassword } }),
+  },
+  administration: {
+    users: () => request<{ users: User[] }>('/administration/users'),
+    review: (id: number, status: 'approved' | 'rejected' | 'suspended') =>
+      request<{ user: User }>(`/administration/users/${id}/status`, { method: 'PATCH', json: { status } }),
+    setRole: (id: number, role: 'personal' | 'operator') =>
+      request<{ user: User }>(`/administration/users/${id}/role`, { method: 'PATCH', json: { role } }),
+    archive: () => request<{ scans: { id: number; title: string; text: string; userName: string; room: string; groupTitle: string | null }[] }>('/administration/archive'),
+    removeScan: (id: number) => request<void>(`/administration/scans/${id}`, { method: 'DELETE' }),
+    documents: () => request<{ documents: { id: number; title: string; text: string; userName: string; room: string }[] }>('/administration/documents'),
+    removeDocument: (id: number) => request<void>(`/administration/documents/${id}`, { method: 'DELETE' }),
+    reports: () => request<{ totals: Record<string, number>; byRoom: { room: string; books: number; pages: number; documents: number }[]; monthly: { month: string; pages: number }[] }>('/administration/reports'),
   },
   settings: {
     get: () => request<Settings>('/settings'),

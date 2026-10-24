@@ -5,9 +5,12 @@ import express from 'express';
 import helmet from 'helmet';
 import type { AppContext } from './context.js';
 import { requireAuth } from './middleware/auth.js';
+import { HttpError } from './lib/http-error.js';
+import { currentUser } from './middleware/auth.js';
 import { requireCustomHeader } from './middleware/csrf.js';
 import { errorHandler } from './middleware/error.js';
 import { analysesRouter } from './routes/analyses.js';
+import { administrationRouter } from './routes/administration.js';
 import { authRouter } from './routes/auth.js';
 import { documentsRouter } from './routes/documents.js';
 import { groupsRouter } from './routes/groups.js';
@@ -48,6 +51,9 @@ export function createApp(ctx: AppContext, options: { webDist?: string } = {}) {
   api.get('/health', (_req, res) => res.json({ ok: true }));
   api.use('/auth', authRouter(ctx));
   api.use(requireAuth(ctx));
+  api.use((req, _res, next) => req.method === 'DELETE' && currentUser(req).role === 'operator'
+    ? next(new HttpError(403, 'El operador no puede borrar datos', 'forbidden')) : next());
+  api.use('/administration', administrationRouter(ctx));
   api.use('/settings', settingsRouter(ctx));
   api.use('/ocr', ocrRouter(ctx));
   api.use('/groups', groupsRouter(ctx));

@@ -6,6 +6,9 @@ export interface User {
   id: number;
   email: string;
   name: string;
+  role: 'admin' | 'operator' | 'personal';
+  status: 'pending' | 'approved' | 'rejected' | 'suspended';
+  room: string;
 }
 
 export interface KeyStatus {

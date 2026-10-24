@@ -7,16 +7,19 @@ import { Logo } from '../components/Logo';
 import { Button, Field, Input } from '../components/ui';
 import './Auth.css';
 
-export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
-  const { login, register } = useAuth();
+export function AuthPage({ mode }: { mode: 'login' | 'register' | 'setup' }) {
+  const { login, register, setupAdmin, pending } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
+  const [room, setRoom] = useState('');
+  const [setupToken, setSetupToken] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [curtainOpen, setCurtainOpen] = useState(false);
   const isLogin = mode === 'login';
+  const isSetup = mode === 'setup';
 
   useEffect(() => {
     if (!curtainOpen) return;
@@ -33,8 +36,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setLoading(true);
     try {
       if (isLogin) await login(email, password);
-      else await register(name, email, password);
-      navigate('/', { replace: true });
+      else if (isSetup) await setupAdmin(name, email, password, setupToken);
+      else await register(name, email, password, room);
+      if (isLogin || isSetup) navigate('/', { replace: true });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -56,13 +60,15 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </section>
 
         <div className="auth-mobile-spacer" aria-hidden="true" />
-        <section className="auth-form-area" aria-label={isLogin ? 'Iniciar sesión' : 'Crear cuenta'}>
+        <section className="auth-form-area" aria-label={isLogin ? 'Iniciar sesión' : isSetup ? 'Configurar administrador' : 'Crear cuenta'}>
           <div className="auth-form-wrap">
             <Logo className="auth-brand" />
             <div className="auth-heading">
-              <h1>{isLogin ? 'Tu biblioteca te espera.' : 'Crea tu cuenta.'}</h1>
-              <p>{isLogin ? 'Inicia sesión y sigue donde quedaste.' : 'Guarda y encuentra tus lecturas en BiblioTru.'}</p>
+              <h1>{isLogin ? 'Tu biblioteca te espera.' : isSetup ? 'Configura el administrador.' : 'Crea tu cuenta.'}</h1>
+              <p>{isLogin ? 'Inicia sesión y sigue donde quedaste.' : isSetup ? 'Primer acceso: usa el código temporal mostrado en la consola del servidor.' : 'Tu cuenta deberá ser aprobada antes de entrar.'}</p>
             </div>
+
+            {pending && !isLogin && !isSetup ? <p role="status">Registro enviado. Espera la aprobación de un operador o administrador.</p> : null}
 
             <form onSubmit={submit} className="auth-form">
               {!isLogin && (
@@ -70,6 +76,12 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required minLength={2} placeholder="Tu nombre" />
                 </Field>
               )}
+              {!isLogin && !isSetup && (
+                <Field label="Sala de la biblioteca">
+                  <Input value={room} onChange={(e) => setRoom(e.target.value)} required minLength={2} maxLength={100} placeholder="Nombre de la sala" />
+                </Field>
+              )}
+              {isSetup && <Field label="Código de instalación"><Input value={setupToken} onChange={(e) => setSetupToken(e.target.value)} required autoComplete="off" placeholder="Código de la consola" /></Field>}
               <Field label="Correo electrónico">
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required placeholder="tucorreo@ejemplo.com" />
               </Field>
@@ -78,14 +90,14 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               </Field>
               {error && <p role="alert" className="auth-error">{error}</p>}
               <Button type="submit" block size="lg" loading={loading} className="auth-submit">
-                {isLogin ? 'Iniciar sesión' : 'Crear cuenta'}
+                {isLogin ? 'Iniciar sesión' : isSetup ? 'Crear administrador' : 'Solicitar acceso'}
               </Button>
             </form>
 
-            <p className="auth-switch">
+            {!isSetup && <p className="auth-switch">
               {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
               <Link to={isLogin ? '/registro' : '/login'}>{isLogin ? 'Crear cuenta' : 'Iniciar sesión'}</Link>
-            </p>
+            </p>}
           </div>
         </section>
       </div>

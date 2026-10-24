@@ -92,7 +92,7 @@ test.describe('Catálogo y manejo de lo escaneado', () => {
 
     await page.getByRole('button', { name: 'Copiar' }).click();
     await expectToast(page, 'Texto copiado');
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Contenido de la segunda\n\nContenido de la primera\n\nContenido de la tercera');
+    expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')).toBe('Contenido de la segunda\n\nContenido de la primera\n\nContenido de la tercera');
 
     await page.getByRole('button', { name: 'Páginas', exact: true }).click();
     await page.getByRole('button', { name: 'Borrar página' }).last().click();
