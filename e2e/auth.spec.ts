@@ -54,7 +54,7 @@ test.describe('Autenticación', () => {
     const cord = page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' });
     await expect(cord).toBeVisible();
     await cord.click();
-    await expect(page.getByRole('heading', { name: 'Una biblioteca que va contigo.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tus lecturas tienen un lugar.' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Recoger cortina informativa' })).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Tirar de la cuerda para abrir información' })).toHaveAttribute('aria-expanded', 'false');

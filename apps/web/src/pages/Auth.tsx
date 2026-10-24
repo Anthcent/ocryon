@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { BookOpen } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../components/feedback';
-import { Logo, Mascot } from '../components/Logo';
+import { Logo } from '../components/Logo';
 import { Button, Field, Input } from '../components/ui';
 import './Auth.css';
 
@@ -51,12 +51,13 @@ function PullCord({ open, toggle }: { open: boolean; toggle: () => void }) {
         toggle();
       }}
     >
-      <svg viewBox="0 0 56 112" className="auth-rope" aria-hidden="true">
-        <path className="auth-rope-shadow" d={`M28 2 C34 24 20 38 28 ${64 + pull}`} />
-        <path className="auth-rope-strand" d={`M28 2 C34 24 20 38 28 ${64 + pull}`} />
-        <circle className="auth-rope-knot" cx="28" cy={68 + pull} r="4" />
-        <rect className="auth-rope-grip" x="18" y={73 + pull} width="20" height="25" rx="10" />
-        <circle className="auth-rope-hole" cx="28" cy={82 + pull} r="3" />
+      <svg viewBox="0 0 56 100" className="auth-rope" aria-hidden="true">
+        <circle className="auth-rope-anchor" cx="28" cy="7" r="7" />
+        <path className="auth-rope-shadow" d={`M28 10 C33 22 22 32 28 ${42 + pull}`} />
+        <path className="auth-rope-strand" d={`M28 10 C33 22 22 32 28 ${42 + pull}`} />
+        <circle className="auth-rope-knot" cx="28" cy={45 + pull} r="4" />
+        <rect className="auth-rope-grip" x="18" y={50 + pull} width="20" height="16" rx="8" />
+        <circle className="auth-rope-hole" cx="28" cy={58 + pull} r="3" />
       </svg>
     </button>
   );
@@ -157,16 +158,15 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <span className="auth-curtain-seal" aria-hidden="true"><BookOpen size={16} strokeWidth={2.5} /></span>
           <span className="auth-curtain-heading">BiblioTru</span>
           <span className="auth-curtain-subheading">Biblioteca Pública del Estado Trujillo</span>
-          <span className="auth-curtain-invite">{curtainOpen ? 'Toca para cerrar' : 'Desliza y descubre tu biblioteca'} <span aria-hidden="true">↓</span></span>
+          <span className="auth-curtain-invite">{curtainOpen ? 'Toca para cerrar' : 'Descubre tu biblioteca'} <span aria-hidden="true">↓</span></span>
         </button>
         <div id="auth-curtain-content" className="auth-curtain-content" inert={!curtainOpen}>
           <div className="auth-curtain-rule" aria-hidden="true" />
-          <h2>Una biblioteca que va contigo.</h2>
-          <p>Digitaliza libros y documentos, busca palabras en tus páginas y vuelve a tus lecturas cuando quieras.</p>
+          <h2>Tus lecturas tienen un lugar.</h2>
+          <p>Escanea libros y documentos, encuentra palabras en sus páginas y retoma la lectura cuando quieras.</p>
           <div className="auth-curtain-features" aria-label="Funciones principales">
             <span>Escanea</span><span>Encuentra</span><span>Lee</span>
           </div>
-          <Mascot className="auth-curtain-mascot" />
         </div>
       </aside>
       <PullCord open={curtainOpen} toggle={() => setCurtainOpen((open) => !open)} />
