@@ -11,19 +11,20 @@ async function openStep(page: Page, title: '¿Dónde se guarda?' | '¿Cómo esca
   if ((await header.getAttribute('aria-expanded')) === 'false') await header.click();
 }
 
-async function chooseEngine(page: Page, name: 'OCR.space' | 'Gemini' | 'Tesseract') {
+async function chooseEngine(page: Page, name: 'OCR Online' | 'Gemini' | 'Tesseract') {
   await openStep(page, '¿Cómo escanear?');
-  await page.getByRole('button', { name: new RegExp(`^${name.replace('.', '\\.')}`) }).click();
+  await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
 }
 
 test.describe('Escáner', () => {
-  test('avisa si falta la API key del motor elegido', async ({ page }) => {
+  test('usa OCR Online compartido y desactiva Tesseract con internet', async ({ page }) => {
     await signUp(page);
+    await updateSettings(page, { ocrspaceKey: 'clave-de-prueba-123' });
     await page.goto('/escanear');
-    // Visible incluso con el paso plegado.
-    await expect(page.getByText(/sin API key/i).locator('visible=true').first()).toBeVisible();
-    await chooseEngine(page, 'Tesseract');
-    await expect(page.getByText('Para usar OCR.space necesitas su API key')).toBeHidden();
+    await openStep(page, '¿Cómo escanear?');
+    await expect(page.getByRole('button', { name: /^OCR Online/ })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^Tesseract/ })).toBeDisabled();
+    await expect(page.getByText('Falta la API key')).toHaveCount(1); // Solo Gemini es opcional.
   });
 
   test('modo manual con OCR.space: escanear, revisar en el visor, reordenar, quitar y guardar individuales', async ({ page }) => {
@@ -259,7 +260,7 @@ test.describe('Escáner', () => {
     await page.goto('/escanear');
     await upload(page, [pageImage(1), pageImage(2)]);
     await page.getByRole('button', { name: 'Escanear (2)' }).click();
-    await expect(cards(page).nth(0).getByText('La API key de OCR.space no es válida')).toBeVisible();
+    await expect(cards(page).nth(0).getByText('La clave de OCR Online no es válida')).toBeVisible();
     // La segunda no se intenta: vuelve a quedar pendiente.
     await expect(cards(page).nth(1).getByText('Sin escanear')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Guardar/ })).toBeDisabled();
@@ -312,6 +313,9 @@ test.describe('Escáner', () => {
     test.setTimeout(120_000);
     await signUp(page);
     await page.goto('/escanear');
+    await openStep(page, '¿Cómo escanear?');
+    await expect(page.getByText('Preparado para usar sin conexión')).toBeVisible({ timeout: 60_000 });
+    await page.context().setOffline(true);
     await chooseEngine(page, 'Tesseract');
     await upload(page, [pageImage(1)]);
     await page.getByRole('button', { name: 'Escanear (1)' }).click();

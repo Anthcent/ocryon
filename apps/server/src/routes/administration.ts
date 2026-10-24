@@ -16,6 +16,14 @@ export function administrationRouter(ctx: AppContext) {
   const router = Router();
   router.use(requireRole('admin', 'operator'));
 
+  router.put('/ocr-online-key', requireRole('admin'), async (req, res) => {
+    const { key } = z.object({ key: z.string().trim().min(8).max(300) }).parse(req.body);
+    await ctx.db.run(`INSERT INTO provider_keys (provider, encrypted_key) VALUES ('ocrspace', ?)
+      ON CONFLICT (provider) DO UPDATE SET encrypted_key = EXCLUDED.encrypted_key, verified_at = NULL, updated_at = now()`,
+    [ctx.cipher.encrypt(key)]);
+    res.json({ configured: true });
+  });
+
   router.get('/users', async (_req, res) => {
     const users = await ctx.db.query(`SELECT id, name, email, room, role, status, created_at AS "createdAt",
       reviewed_at AS "reviewedAt" FROM users ORDER BY created_at DESC`);

@@ -45,7 +45,17 @@ export async function ensureAdmin(page: Page) {
 }
 
 export async function updateSettings(page: Page, data: Record<string, unknown>) {
-  const res = await page.request.put('/api/settings', { headers: HEADERS, data });
+  const { ocrspaceKey, ...preferences } = data;
+  if (typeof ocrspaceKey === 'string') {
+    const admin = await request.newContext({ baseURL: 'http://localhost:5174' });
+    try {
+      await admin.post('/api/auth/login', { headers: HEADERS, data: { email: 'admin-e2e@example.com', password: 'secreto123' } });
+      const changed = await admin.put('/api/administration/ocr-online-key', { headers: HEADERS, data: { key: ocrspaceKey } });
+      expect(changed.status()).toBe(200);
+    } finally { await admin.dispose(); }
+  }
+  if (!Object.keys(preferences).length) return;
+  const res = await page.request.put('/api/settings', { headers: HEADERS, data: preferences });
   expect(res.ok()).toBeTruthy();
 }
 

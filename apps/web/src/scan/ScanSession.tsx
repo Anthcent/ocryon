@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../lib/api';
+import { useConnectivity } from '../lib/connectivity';
 import { prepareImage, rotateImage } from '../lib/image';
 import { loadPages, savePages, type PendingPage } from '../lib/pages-store';
 import { tesseractRecognize } from '../lib/tesseract';
@@ -36,7 +37,7 @@ interface ScanSession {
 const ScanSessionContext = createContext<ScanSession | null>(null);
 
 // Errores de configuración: no tiene sentido seguir con la cola hasta que el usuario los corrija.
-const BLOCKING_CODES = new Set(['missing_api_key', 'invalid_api_key', 'invalid_model', 'offline', 'unauthenticated']);
+const BLOCKING_CODES = new Set(['missing_api_key', 'invalid_api_key', 'invalid_model', 'offline', 'engine_unavailable', 'unauthenticated']);
 
 /**
  * Sesión de escaneo global: las páginas capturadas y la cola de OCR sobreviven
@@ -56,6 +57,7 @@ export function ScanSessionProvider({
   const [progress, setProgress] = useState<Record<string, ScanProgress>>({});
   const [ready, setReady] = useState(false);
   const [engine, setEngine] = useState<Engine>(defaults.engine);
+  const { online, offlineReady } = useConnectivity();
   const [language, setLanguage] = useState(defaults.language);
   const [autoScan, setAutoScan] = useState(defaults.autoScan);
   const running = useRef(false);
@@ -65,6 +67,10 @@ export function ScanSessionProvider({
     setLanguage(defaults.language);
     setAutoScan(defaults.autoScan);
   }, [defaults.engine, defaults.language, defaults.autoScan]);
+
+  useEffect(() => {
+    setEngine((current) => online ? (current === 'tesseract' ? 'ocrspace' : current) : offlineReady ? 'tesseract' : current);
+  }, [online, offlineReady]);
 
   useEffect(() => {
     loadPages(userId).then((p) => {
@@ -96,6 +102,9 @@ export function ScanSessionProvider({
 
     (async () => {
       try {
+        if (engine === 'tesseract' && (navigator.onLine || !offlineReady)) {
+          throw new ApiError(0, navigator.onLine ? 'Con conexión usa OCR Online o Gemini' : 'Tesseract sin conexión aún no está preparado en este dispositivo', 'engine_unavailable');
+        }
         if (engine !== 'tesseract' && !navigator.onLine) {
           throw new ApiError(0, 'Sin conexión: usa Tesseract para escanear sin internet', 'offline');
         }
@@ -145,7 +154,7 @@ export function ScanSessionProvider({
         });
       }
     })();
-  }, [pages, ready, engine, language, patch]);
+  }, [pages, ready, engine, language, patch, offlineReady]);
 
   const addImages = useCallback(
     async (files: Blob[]) => {

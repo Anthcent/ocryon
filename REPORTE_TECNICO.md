@@ -59,11 +59,11 @@ El progreso de subida remota es real hasta alrededor del 40 %; el resto se aprox
 
 | Motor | Dónde corre | Implementación y consideraciones |
 | --- | --- | --- |
-| Tesseract | Navegador | `tesseract.js` crea un worker con modo `LSTM_ONLY`; worker, núcleo y paquetes de idiomas se sirven desde `/tesseract` sin CDN. Se reutiliza por idioma y se termina el anterior al cambiar. Permite OCR sin conexión **si los recursos necesarios ya están disponibles**; no implica que toda la aplicación sea una PWA offline. |
+| Tesseract | Navegador | `tesseract.js` crea un worker con modo `LSTM_ONLY`; worker, núcleo y paquetes de idiomas se sirven desde `/tesseract` sin CDN. Se reutiliza por idioma y se termina el anterior al cambiar. Un service worker descarga los recursos al visitar la app con internet. El botón se desactiva con conexión y solo se habilita sin internet después de preparar los recursos; la aplicación no es una PWA offline completa. |
 | OCR.space | Proveedor externo, vía servidor | API recibe una imagen en memoria y envía multipart con idioma, `OCREngine=2`, `scale=true` y detección de orientación. Une `ParsedText` de resultados, normaliza saltos de línea y maneja errores del proveedor. |
 | Gemini | Proveedor externo, vía servidor | Envía imagen codificada en base64 y un prompt que pide transcripción literal, orden de columnas, unión de palabras cortadas y omisión de numeración/cabeceras repetidas. El resultado depende del modelo y puede necesitar revisión humana. |
 
-La ruta `POST /api/ocr` acepta JPEG, PNG o WEBP, limita tamaño y número de archivos, valida motor/idioma con Zod y aplica límite de solicitudes por usuario. Usa claves configuradas para cada usuario o globalmente; la imagen se mantiene en memoria del servidor durante la petición y no se escribe en disco. Tesseract no usa esa ruta: procesa el blob localmente. Los motores externos requieren internet y transmiten la imagen al proveedor correspondiente.
+La ruta `POST /api/ocr` acepta JPEG, PNG o WEBP, limita tamaño y número de archivos, valida motor/idioma con Zod y aplica límite de solicitudes por usuario. OCR Online usa una clave institucional cifrada en PostgreSQL, administrada solo por Admin, o como alternativa `OCRSPACE_API_KEY` de entorno; las antiguas claves individuales ya no se usan. Gemini conserva la clave opcional por usuario. La imagen se mantiene en memoria del servidor durante la petición y no se escribe en disco. Tesseract no usa esa ruta: procesa el blob localmente. Los motores externos requieren internet y transmiten la imagen al proveedor correspondiente.
 
 ### 4. Postprocesamiento y guardado
 

@@ -9,6 +9,7 @@ import { openDatabase, toPositional, type Database } from './db/index.js';
 import { migrations } from './db/migrations.js';
 import { createCipher } from './lib/crypto.js';
 import { resolveSecret } from './lib/secrets.js';
+import { getApiKey } from './services/settings.js';
 import { buildSnippet, searchTerms } from './lib/snippet.js';
 import { toTsQuery } from './routes/search.js';
 
@@ -19,22 +20,23 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(() => db?.close());
 beforeEach(async () => {
-  await db.run('TRUNCATE users, groups, scans, analyses, doc_templates, documents, settings RESTART IDENTITY CASCADE');
+  await db.run('TRUNCATE users, groups, scans, analyses, doc_templates, documents, settings, provider_keys RESTART IDENTITY CASCADE');
 });
 
-function setup(options: { allowRemoteSetup?: boolean; setupToken?: string } = {}) {
-  const app = createApp({
+function setup(options: { allowRemoteSetup?: boolean; setupToken?: string; fallbackOcrKey?: string } = {}) {
+  const context = {
     db,
     cipher: createCipher('test-secret-key-123456'),
     jwtSecret: 'test-jwt-secret-123456',
     setupToken: options.setupToken ?? 'test-setup-token',
     allowRemoteSetup: options.allowRemoteSetup,
     secureCookies: false,
-    fallbackKeys: { ocrspace: '', gemini: '' },
-  });
+    fallbackKeys: { ocrspace: options.fallbackOcrKey ?? '', gemini: '' },
+  };
+  const app = createApp(context);
   const agent = request.agent(app);
   const post = (url: string, body?: object) => agent.post(url).set('X-Requested-With', 'ocryon').send(body);
-  return { db, app, agent, post };
+  return { db, app, agent, post, context };
 }
 
 async function registered(email = 'ana@example.com') {
@@ -197,18 +199,59 @@ describe('auth', () => {
 });
 
 describe('ajustes', () => {
-  it('guarda las API keys cifradas y nunca las devuelve en claro', async () => {
+  it('conserva clave opcional de Gemini cifrada y nunca la devuelve en claro', async () => {
     const { agent, db } = await registered();
     const res = await agent
       .put('/api/settings')
       .set('X-Requested-With', 'ocryon')
-      .send({ ocrspaceKey: 'K81234567890ABCD', defaultEngine: 'gemini', autoScan: true })
-      .expect(200);
-    expect(res.body.keys.ocrspace).toEqual({ configured: true, source: 'user', masked: '••••ABCD' });
+       .send({ geminiKey: 'K81234567890ABCD', defaultEngine: 'gemini', autoScan: true })
+       .expect(200);
+    expect(res.body.keys.gemini).toEqual({ configured: true, source: 'user', masked: '••••ABCD' });
     expect(res.body.defaultEngine).toBe('gemini');
     expect(JSON.stringify(res.body)).not.toContain('K81234567890ABCD');
-    const row = await db.one<{ ocrspace_key_enc: string }>('SELECT ocrspace_key_enc FROM settings');
-    expect(row!.ocrspace_key_enc).not.toContain('K81234567890ABCD');
+    const row = await db.one<{ gemini_key_enc: string }>('SELECT gemini_key_enc FROM settings');
+    expect(row!.gemini_key_enc).not.toContain('K81234567890ABCD');
+  });
+
+  it('comparte OCR Online cifrado; solo Admin cambia la clave', async () => {
+    const person = await registered('staff@example.com');
+    const other = await registered('other@example.com');
+    await person.agent.put('/api/settings').set('X-Requested-With', 'ocryon')
+      .send({ ocrspaceKey: 'KpersonalNotAllowed' }).expect(403);
+    await person.post('/api/settings/test/ocrspace').expect(403);
+    const admin = setup();
+    await admin.post('/api/auth/register', { name: 'Responsable', email: 'admin@example.com', password: 'secreto123', room: 'Dirección' }).expect(201);
+    await db.run("UPDATE users SET role = 'admin', status = 'approved' WHERE email = ?", ['admin@example.com']);
+    await admin.post('/api/auth/login', { email: 'admin@example.com', password: 'secreto123' }).expect(200);
+    const operator = setup();
+    await operator.post('/api/auth/register', { name: 'Operador', email: 'operator@example.com', password: 'secreto123', room: 'Sala Norte' }).expect(201);
+    await db.run("UPDATE users SET role = 'operator', status = 'approved' WHERE email = ?", ['operator@example.com']);
+    await operator.post('/api/auth/login', { email: 'operator@example.com', password: 'secreto123' }).expect(200);
+    await operator.agent.put('/api/administration/ocr-online-key').set('X-Requested-With', 'ocryon')
+      .send({ key: 'KoperatorNotAllowed' }).expect(403);
+    await admin.agent.put('/api/administration/ocr-online-key').set('X-Requested-With', 'ocryon')
+      .send({ key: 'KsharedTestKey123' }).expect(200, { configured: true });
+    const row = await db.one<{ encrypted_key: string }>("SELECT encrypted_key FROM provider_keys WHERE provider = 'ocrspace'");
+    expect(row!.encrypted_key).not.toContain('KsharedTestKey123');
+    for (const member of [person, other, operator, admin]) {
+      const result = await member.agent.get('/api/settings').expect(200);
+      expect(result.body.keys.ocrspace).toEqual({ configured: true, source: 'server', verified: false, masked: '' });
+      expect(JSON.stringify(result.body)).not.toContain('KsharedTestKey123');
+    }
+    const personId = (await db.one<{ id: number }>('SELECT id FROM users WHERE email = ?', ['staff@example.com']))!.id;
+    expect(await getApiKey(person.context, personId, 'ocrspace')).toBe('KsharedTestKey123');
+    await admin.agent.put('/api/administration/ocr-online-key').set('X-Requested-With', 'ocryon')
+      .send({ key: 'KreplacementKey123' }).expect(200);
+    expect(await getApiKey(person.context, personId, 'ocrspace')).toBe('KreplacementKey123');
+  }, 15_000);
+
+  it('usa clave de entorno común aunque existan claves antiguas de usuario', async () => {
+    const member = await registered();
+    const id = (await db.one<{ id: number }>('SELECT id FROM users WHERE email = ?', ['ana@example.com']))!.id;
+    await db.run('UPDATE settings SET ocrspace_key_enc = ? WHERE user_id = ?', [member.context.cipher.encrypt('KlegacyUserKey'), id]);
+    member.context.fallbackKeys.ocrspace = 'KsharedFromDocker';
+    expect((await member.agent.get('/api/settings').expect(200)).body.keys.ocrspace).toMatchObject({ configured: true, source: 'server' });
+    expect(await getApiKey(member.context, id, 'ocrspace')).toBe('KsharedFromDocker');
   });
 
   it('pide configurar la clave antes de usar OCR', async () => {

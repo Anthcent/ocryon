@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { BookOpen, Check, ChevronDown, Cpu, FileText, Files, KeyRound, Plus, Search, Sparkles, Zap } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useConnectivity } from '../lib/connectivity';
 import { LessonProgress } from '../components/ActionTile';
 import { GroupFields } from '../components/GroupFields';
 import { Toggle } from '../components/ui';
@@ -84,6 +85,7 @@ export function ChoiceCard({
   title,
   description,
   badge,
+  disabled,
 }: {
   selected: boolean;
   onSelect: () => void;
@@ -92,14 +94,16 @@ export function ChoiceCard({
   title: string;
   description: string;
   badge?: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onSelect}
       aria-pressed={selected}
       className={clsx(
-        'relative flex w-full items-center gap-3 rounded-2xl border-2 border-b-4 p-3 text-left transition active:translate-y-[2px] active:border-b-2',
+        'relative flex w-full items-center gap-3 rounded-2xl border-2 border-b-4 p-3 text-left transition active:translate-y-[2px] active:border-b-2 disabled:cursor-not-allowed disabled:opacity-55',
         selected ? 'border-macaw bg-macaw-light' : 'border-swan bg-white hover:bg-polar',
       )}
     >
@@ -289,12 +293,14 @@ export interface EngineProps {
 }
 
 export function engineSummary({ engine, language, autoScan, keysReady }: EngineProps) {
+  if (engine === 'tesseract' && !keysReady.tesseract) return 'Tesseract · no disponible';
   if (!keysReady[engine]) return `${ENGINES[engine].label} · sin API key`;
   const lang = LANGUAGES.find((l) => l.code === language)?.label ?? language;
   return `${ENGINES[engine].label} · ${lang}${autoScan ? ' · automático' : ''}`;
 }
 
 export function EnginePanel(props: EngineProps) {
+  const { online, offlineReady } = useConnectivity();
   return (
     <StepPanel>
       <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
@@ -303,14 +309,17 @@ export function EnginePanel(props: EngineProps) {
             key={e}
             selected={props.engine === e}
             onSelect={() => props.setEngine(e)}
+            disabled={e === 'tesseract' && (online || !offlineReady)}
             icon={ENGINE_ICON[e].icon}
             iconClass={ENGINE_ICON[e].className}
             title={ENGINES[e].label}
             description={ENGINES[e].description}
             badge={
-              props.keysReady[e] ? (
+              e === 'tesseract' ? (
+                <span className="text-xs font-extrabold text-wolf">{online ? offlineReady ? 'Preparado para usar sin conexión' : 'Preparando modo sin conexión' : offlineReady ? 'Listo sin conexión' : 'Requiere preparación previa'}</span>
+              ) : props.keysReady[e] ? (
                 <span className="inline-flex items-center gap-1 text-xs font-extrabold text-feather-dark">
-                  <Check className="size-3.5" strokeWidth={3} /> {ENGINES[e].online ? 'Listo' : 'Sin internet'}
+                  <Check className="size-3.5" strokeWidth={3} /> Listo
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-xs font-extrabold text-bee-dark">
@@ -321,15 +330,14 @@ export function EnginePanel(props: EngineProps) {
           />
         ))}
       </div>
-      {!props.keysReady[props.engine] && (
+      {!props.keysReady[props.engine] && props.engine !== 'tesseract' && (
         <p className="rounded-2xl bg-bee-light p-3 text-sm font-semibold">
-          Para usar {ENGINES[props.engine].label} necesitas su API key.{' '}
-          <Link to="/ajustes" className="font-extrabold text-macaw">
-            Configurarla
-          </Link>{' '}
-          o elige Tesseract, que funciona sin clave.
+          {props.engine === 'ocrspace' ? 'OCR Online aún no está configurado. Pide al administrador que active la conexión.' : <>
+            Para usar Gemini necesitas una clave opcional. <Link to="/ajustes" className="font-extrabold text-macaw">Ir a ajustes</Link>.
+          </>}
         </p>
       )}
+      {!online && !offlineReady && <p role="status" className="rounded-xl bg-bee-light p-3 text-sm font-semibold text-eel">Tesseract no está preparado para este dispositivo. Conéctate una vez para descargar sus recursos antes de usarlo sin internet.</p>}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-end">
         <div>

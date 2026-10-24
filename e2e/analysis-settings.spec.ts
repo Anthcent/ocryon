@@ -48,20 +48,12 @@ test.describe('Análisis', () => {
 });
 
 test.describe('Ajustes', () => {
-  test('guardar, probar y borrar API keys', async ({ page }) => {
+  test('OCR Online compartido y Gemini opcional', async ({ page }) => {
     await signUp(page);
+    await updateSettings(page, { ocrspaceKey: 'clave-de-prueba-123' });
     await page.goto('/ajustes');
-    await expect(page.getByText('Sin configurar')).toHaveCount(2);
-
-    const ocrInput = page.getByLabel('API key de OCR.space');
-    await ocrInput.fill('K1234567890XYZW');
-    await ocrInput.locator('xpath=ancestor::form').getByRole('button', { name: 'Guardar' }).click();
-    await expectToast(page, 'Clave de OCR.space guardada');
-    await expect(page.getByText('••••XYZW')).toBeVisible();
-    await expect(ocrInput).toHaveValue('');
-
-    await ocrInput.locator('xpath=ancestor::form').getByRole('button', { name: 'Probar' }).click();
-    await expectToast(page, /OCR.space funciona correctamente/);
+    await expect(page.getByText(/API (configurada|conectada)/)).toBeVisible();
+    await expect(page.getByLabel('API key de OCR Online')).toHaveCount(0);
 
     // Una clave inválida se detecta al probarla.
     const geminiInput = page.getByLabel('API key de Gemini');
@@ -74,6 +66,22 @@ test.describe('Ajustes', () => {
     await page.getByRole('button', { name: 'Eliminar clave de Gemini' }).click();
     await expectToast(page, 'Clave eliminada');
     await expect(page.getByText('Sin configurar')).toHaveCount(1);
+
+    await page.request.post('/api/auth/login', {
+      headers: { 'X-Requested-With': 'ocryon' },
+      data: { email: 'admin-e2e@example.com', password: 'secreto123' },
+    });
+    await page.goto('/administracion');
+    await page.getByRole('button', { name: 'OCR Online' }).click();
+    await expect(page.getByText(/API (configurada|conectada)/)).toBeVisible();
+    await page.getByRole('button', { name: 'Cambiar clave' }).click();
+    await page.getByLabel('Nueva API key de OCR Online').fill('clave-de-prueba-123');
+    await page.getByRole('button', { name: 'Guardar nueva clave' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Nueva clave guardada' })).toBeVisible();
+    await page.getByRole('button', { name: 'Probar conexión' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'API conectada' })).toBeVisible();
+    await page.goto('/ajustes');
+    await expect(page.getByText('API conectada')).toBeVisible();
   });
 
   test('preferencias de escaneo se aplican al escáner', async ({ page }) => {

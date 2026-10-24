@@ -149,7 +149,7 @@ export function Segmented<T extends string>({
 }: {
   value: T;
   onChange: (v: T) => void;
-  options: { value: T; label: ReactNode; icon?: ReactNode }[];
+  options: { value: T; label: ReactNode; icon?: ReactNode; disabled?: boolean }[];
 }) {
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
@@ -157,10 +157,11 @@ export function Segmented<T extends string>({
         <button
           key={o.value}
           type="button"
+          disabled={o.disabled}
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
           className={clsx(
-            'flex items-center justify-center gap-2 rounded-2xl border-2 border-b-4 px-3 py-2.5 text-sm font-extrabold transition active:translate-y-[2px] active:border-b-2',
+            'flex items-center justify-center gap-2 rounded-2xl border-2 border-b-4 px-3 py-2.5 text-sm font-extrabold transition active:translate-y-[2px] active:border-b-2 disabled:cursor-not-allowed disabled:opacity-50',
             value === o.value ? 'border-macaw bg-macaw-light text-macaw-dark' : 'border-swan bg-white text-wolf hover:bg-polar',
           )}
         >

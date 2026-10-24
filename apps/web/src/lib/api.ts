@@ -97,6 +97,7 @@ export const api = {
   },
   administration: {
     users: () => request<{ users: User[] }>('/administration/users'),
+    updateOcrKey: (key: string) => request<{ configured: true }>('/administration/ocr-online-key', { method: 'PUT', json: { key } }),
     updateProfile: (id: number, data: Pick<User, 'name' | 'email' | 'room'>) =>
       request<{ user: User }>(`/administration/users/${id}/profile`, { method: 'PATCH', json: data }),
     catalog: (id: number) => request<AdminCatalog>(`/administration/users/${id}/catalog`),
@@ -116,7 +117,7 @@ export const api = {
   },
   settings: {
     get: () => request<Settings>('/settings'),
-    update: (patch: Partial<Omit<Settings, 'keys'>> & { ocrspaceKey?: string | null; geminiKey?: string | null }) =>
+    update: (patch: Partial<Omit<Settings, 'keys'>> & { geminiKey?: string | null }) =>
       request<Settings>('/settings', { method: 'PUT', json: patch }),
     test: (provider: 'ocrspace' | 'gemini') => request<{ ok: true; ms: number }>(`/settings/test/${provider}`, { method: 'POST' }),
   },

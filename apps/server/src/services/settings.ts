@@ -31,6 +31,10 @@ function decryptOrEmpty(ctx: AppContext, value: string | null): string {
 /** Ajustes en formato seguro para el cliente: nunca incluye las claves en claro. */
 export async function publicSettings(ctx: AppContext, userId: number) {
   const row = await loadSettingsRow(ctx, userId);
+  const ocrOnlineKey = await ctx.db.one<{ encrypted_key: string; verified_at: string | null }>(
+    "SELECT encrypted_key, verified_at FROM provider_keys WHERE provider = 'ocrspace'",
+  );
+  const sharedOcrConfigured = Boolean(decryptOrEmpty(ctx, ocrOnlineKey?.encrypted_key ?? null) || ctx.fallbackKeys.ocrspace);
   const describe = (provider: Provider, enc: string | null) => {
     const own = decryptOrEmpty(ctx, enc);
     const fallback = ctx.fallbackKeys[provider];
@@ -46,19 +50,28 @@ export async function publicSettings(ctx: AppContext, userId: number) {
     autoScan: row.auto_scan,
     geminiModel: row.gemini_model,
     keys: {
-      ocrspace: describe('ocrspace', row.ocrspace_key_enc),
+      // Existing personal keys are intentionally ignored: institutional OCR is shared.
+      ocrspace: {
+        configured: sharedOcrConfigured,
+        source: sharedOcrConfigured ? 'server' : 'none',
+        verified: sharedOcrConfigured && Boolean(ocrOnlineKey?.verified_at && new Date(ocrOnlineKey.verified_at).getTime() > Date.now() - 24 * 60 * 60 * 1000),
+        masked: '',
+      },
       gemini: describe('gemini', row.gemini_key_enc),
     },
   };
 }
 
 export async function getApiKey(ctx: AppContext, userId: number, provider: Provider): Promise<string> {
-  const row = await loadSettingsRow(ctx, userId);
-  const own = decryptOrEmpty(ctx, provider === 'ocrspace' ? row.ocrspace_key_enc : row.gemini_key_enc);
+  const own = provider === 'ocrspace'
+    ? decryptOrEmpty(ctx, (await ctx.db.one<{ encrypted_key: string }>(
+      "SELECT encrypted_key FROM provider_keys WHERE provider = 'ocrspace'",
+    ))?.encrypted_key ?? null)
+    : decryptOrEmpty(ctx, (await loadSettingsRow(ctx, userId)).gemini_key_enc);
   const key = own || ctx.fallbackKeys[provider];
   if (!key) {
-    const name = provider === 'ocrspace' ? 'OCR.space' : 'Gemini';
-    throw new HttpError(412, `Configura tu API key de ${name} en Ajustes`, 'missing_api_key');
+    if (provider === 'ocrspace') throw new HttpError(412, 'OCR Online no está configurado. Contacta al administrador.', 'missing_api_key');
+    throw new HttpError(412, 'Configura tu API key de Gemini en Ajustes', 'missing_api_key');
   }
   return key;
 }

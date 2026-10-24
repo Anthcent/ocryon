@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { Button, Card, ProgressBar } from '../components/ui';
 import { api } from '../lib/api';
+import { useConnectivity } from '../lib/connectivity';
 import { EMPTY_GROUP } from '../components/GroupFields';
 import { detectPageLabel } from '../lib/page-number';
 import type { Engine, Group, GroupInput, ScanEngine } from '../lib/types';
@@ -28,6 +29,7 @@ import { useSettings } from '../settings/SettingsContext';
 export function ScannerPage() {
   const session = useScanSession();
   const { settings } = useSettings();
+  const { online, offlineReady } = useConnectivity();
   const { toast, confirm } = useFeedback();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -76,7 +78,7 @@ export function ScannerPage() {
   const keysReady: Record<Engine, boolean> = {
     ocrspace: settings.keys.ocrspace.configured,
     gemini: settings.keys.gemini.configured,
-    tesseract: true,
+    tesseract: !online && offlineReady,
   };
 
   const addFiles = async (files: FileList | Blob[] | null) => {

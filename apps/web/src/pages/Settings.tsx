@@ -1,10 +1,12 @@
 import { CircleCheck, ExternalLink, KeyRound, LogOut, ShieldCheck, SlidersHorizontal, Trash2, UserRound } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage, useFeedback } from '../components/feedback';
 import { Badge, Button, Card, Field, Input, PageHeader, Segmented, Select, Toggle } from '../components/ui';
 import { api } from '../lib/api';
 import { ENGINES, LANGUAGES } from '../lib/constants';
+import { useConnectivity } from '../lib/connectivity';
 import type { Engine, KeyStatus } from '../lib/types';
 import { useSettings } from '../settings/SettingsContext';
 
@@ -26,6 +28,7 @@ function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: 
 export function SettingsPage() {
   const { user, logout } = useAuth();
   const { settings, setSettings } = useSettings();
+  const { online, offlineReady } = useConnectivity();
   const { toast } = useFeedback();
 
   const update = async (patch: Parameters<typeof api.settings.update>[0], message = 'Ajustes guardados') => {
@@ -41,18 +44,18 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Ajustes" subtitle="Configura los motores de OCR, tus preferencias y tu cuenta." />
+      <PageHeader title="Ajustes" subtitle="Consulta el OCR Online, ajusta tus preferencias y tu cuenta." />
 
-      <Section icon={<KeyRound />} title="API keys" subtitle="Se guardan cifradas en el servidor y nunca se muestran completas.">
+      <Section icon={<KeyRound />} title="OCR Online" subtitle="La biblioteca proporciona la conexión para todo el personal.">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 font-extrabold text-eel">{settings.keys.ocrspace.configured && <CircleCheck className="size-5 text-feather-dark" />} OCR Online <Badge tone={settings.keys.ocrspace.configured ? 'green' : 'yellow'}>{settings.keys.ocrspace.verified ? 'API conectada' : settings.keys.ocrspace.configured ? 'API configurada' : 'Sin configurar'}</Badge></div>
+          {user?.role === 'admin' && <Link to="/administracion?modulo=ocr" className="text-sm font-extrabold text-feather-dark underline underline-offset-4">Administrar conexión</Link>}
+        </div>
+        {!settings.keys.ocrspace.configured && <p className="mt-3 text-sm text-wolf">Pide al administrador que configure OCR Online.</p>}
+      </Section>
+
+      <Section icon={<KeyRound />} title="Gemini (opcional)" subtitle="Si lo usas, tu clave se guarda cifrada en el servidor.">
         <div className="space-y-6">
-          <ApiKeyEditor
-            provider="ocrspace"
-            name="OCR.space"
-            status={settings.keys.ocrspace}
-            help="https://ocr.space/ocrapi/freekey"
-            helpLabel="Obtener una clave gratis"
-            onSave={(key) => update({ ocrspaceKey: key }, key ? 'Clave de OCR.space guardada' : 'Clave eliminada')}
-          />
           <ApiKeyEditor
             provider="gemini"
             name="Gemini"
@@ -73,7 +76,7 @@ export function SettingsPage() {
             <Segmented<Engine>
               value={settings.defaultEngine}
               onChange={(defaultEngine) => update({ defaultEngine })}
-              options={(Object.keys(ENGINES) as Engine[]).map((e) => ({ value: e, label: ENGINES[e].label }))}
+              options={(Object.keys(ENGINES) as Engine[]).map((e) => ({ value: e, label: ENGINES[e].label, disabled: e === 'tesseract' && (online || !offlineReady) }))}
             />
           </Field>
           <Field label="Idioma predeterminado">
@@ -116,7 +119,7 @@ function ApiKeyEditor({
   helpLabel,
   onSave,
 }: {
-  provider: 'ocrspace' | 'gemini';
+  provider: 'gemini';
   name: string;
   status: KeyStatus;
   help: string;

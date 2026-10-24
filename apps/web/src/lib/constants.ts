@@ -10,13 +10,13 @@ export const LANGUAGES: { code: string; label: string }[] = [
 ];
 
 export const ENGINES: Record<Engine, { label: string; description: string; online: boolean }> = {
-  ocrspace: { label: 'OCR.space', description: 'Rápido y preciso. Requiere internet y API key.', online: true },
+  ocrspace: { label: 'OCR Online', description: 'Escaneo en línea con la clave de la biblioteca.', online: true },
   gemini: { label: 'Gemini', description: 'IA de Google: la mejor calidad en páginas difíciles.', online: true },
   tesseract: { label: 'Tesseract', description: 'Funciona en tu dispositivo, sin enviar la imagen.', online: false },
 };
 
 export const ENGINE_LABEL: Record<string, string> = {
-  ocrspace: 'OCR.space',
+  ocrspace: 'OCR Online',
   gemini: 'Gemini',
   tesseract: 'Tesseract',
   manual: 'Manual',

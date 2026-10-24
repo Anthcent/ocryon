@@ -22,20 +22,26 @@ export async function ocrSpaceRecognize(image: Buffer, mimeType: string, apiKey:
       signal: AbortSignal.timeout(90_000),
     });
   } catch {
-    throw new HttpError(502, 'No se pudo conectar con OCR.space', 'provider_unreachable');
+    throw new HttpError(502, 'No se pudo conectar con OCR Online', 'provider_unreachable');
   }
 
   const body = (await res.json().catch(() => null)) as any;
   if (res.status === 403 || res.status === 401) {
-    throw new HttpError(400, 'La API key de OCR.space no es válida', 'invalid_api_key');
+    throw new HttpError(400, 'La clave de OCR Online no es válida', 'invalid_api_key');
   }
   if (!res.ok || !body) {
     const detail = typeof body === 'string' ? body : body?.ErrorMessage;
-    throw new HttpError(502, `OCR.space respondió con un error${detail ? `: ${detail}` : ''}`, 'provider_error');
+    throw new HttpError(502, `OCR Online respondió con un error${detail ? `: ${detail}` : ''}`, 'provider_error');
   }
   if (body.IsErroredOnProcessing) {
     const detail = [body.ErrorMessage].flat().filter(Boolean).join(' ');
-    throw new HttpError(422, `OCR.space no pudo procesar la imagen${detail ? `: ${detail}` : ''}`, 'provider_error');
+    if (/invalid.{0,30}(api.?key|apikey)|(?:api.?key|apikey).{0,30}invalid|clave.{0,30}inválid/i.test(detail)) {
+      throw new HttpError(400, 'La clave de OCR Online no es válida', 'invalid_api_key');
+    }
+    if (/quota|rate.?limit|exceeded|límite/i.test(detail)) {
+      throw new HttpError(429, 'OCR Online alcanzó el límite de solicitudes', 'provider_limit');
+    }
+    throw new HttpError(422, `OCR Online no pudo procesar la imagen${detail ? `: ${detail}` : ''}`, 'provider_error');
   }
   const results: any[] = body.ParsedResults ?? [];
   return results.map((r) => r.ParsedText ?? '').join('\n').replace(/\r\n/g, '\n').trim();

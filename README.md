@@ -123,6 +123,28 @@ Variables de entorno (se configuran en el panel del servidor, nunca en Git):
 | `AUTH_RATE_LIMIT` | No | Intentos de login/registro por IP cada 15 min (20 por defecto). |
 | `SETUP_TOKEN` | Temporal | Código hexadecimal aleatorio de 48+ caracteres. Habilita configurar el primer Admin mediante HTTPS. Retíralo después. |
 
+### OCR Online para todo el personal
+
+El escaneo con OCR Online usa una única clave institucional. No incluyas la clave en Git, en
+capturas ni en mensajes. Para activarla después de desplegar:
+
+1. Inicia sesión como Admin y abre **Administración → OCR Online → Agregar clave**.
+2. Pega una clave nueva y pulsa **Guardar nueva clave** y **Probar conexión**.
+3. En Ajustes, el personal verá **API conectada** tras la prueba (válida durante 24 horas),
+   pero no podrá ver ni cambiar la clave.
+
+La clave se guarda cifrada en PostgreSQL con `ENCRYPTION_KEY`; para reemplazarla, usa **Cambiar
+clave**. Alternativamente, `OCRSPACE_API_KEY` en Environment Settings de la aplicación sirve
+como clave inicial común. Una clave guardada por Admin tiene prioridad sobre la variable. No
+cambies `ENCRYPTION_KEY` después de guardar la clave. Las antiguas claves individuales de OCR
+dejan de usarse; Gemini conserva su configuración opcional por usuario.
+La cuota del proveedor se comparte entre todas las cuentas: el plan gratuito documenta un
+límite de 500 solicitudes diarias por IP y 25 000 mensuales.
+
+Tesseract se desactiva mientras hay conexión a internet y se habilita sin conexión solo si
+sus recursos se descargaron previamente al abrir la aplicación conectada (unos 21 MB). Mantén
+la pestaña abierta para usar el escáner cuando se corte la conexión.
+
 La imagen escucha siempre en `0.0.0.0:8080` (`LISTEN_PORT=8080`), aunque la plataforma inyecte otro `PORT`. Si PostgreSQL tarda en arrancar, la app reintenta la conexión durante unos dos minutos.
 
 > **HTTPS obligatorio:** en producción la cookie de sesión es `Secure`, así que la app debe

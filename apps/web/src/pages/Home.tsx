@@ -39,7 +39,7 @@ export function HomePage() {
   }
   if (!stats) return <PageLoader />;
 
-  const noKeys = loaded && !settings.keys.ocrspace.configured && !settings.keys.gemini.configured;
+  const noKeys = loaded && !settings.keys.ocrspace.configured;
   const maxDay = Math.max(1, ...stats.week.map((d) => d.count));
   const weekTotal = stats.week.reduce((sum, d) => sum + d.count, 0);
 
@@ -72,11 +72,11 @@ export function HomePage() {
       {noKeys && (
         <Card className="flex flex-col gap-3 border-bee bg-bee-light p-4 sm:flex-row sm:items-center">
           <p className="flex-1 font-semibold">
-            Configura tu API key de OCR.space o Gemini para escanear con la mejor calidad. Mientras tanto puedes usar Tesseract.
+            OCR Online no está configurado. Solicita al administrador que conecte la biblioteca.
           </p>
           <Link to="/ajustes">
             <Button variant="warning" size="sm">
-              Ir a ajustes
+              Ver estado
             </Button>
           </Link>
         </Card>

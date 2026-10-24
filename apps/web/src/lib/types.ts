@@ -21,6 +21,7 @@ export interface AdminCatalog {
 export interface KeyStatus {
   configured: boolean;
   source: 'user' | 'server' | 'none';
+  verified?: boolean;
   masked: string;
 }
 

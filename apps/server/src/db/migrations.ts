@@ -117,4 +117,13 @@ export const migrations: string[] = [
   CREATE INDEX idx_users_status ON users(status, created_at DESC);
   CREATE INDEX idx_users_room ON users(room);
   `,
+  /* sql */ `
+  -- Clave institucional: independiente de ajustes personales y cifrada con ENCRYPTION_KEY.
+  CREATE TABLE provider_keys (
+    provider text PRIMARY KEY,
+    encrypted_key text NOT NULL,
+    verified_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  `,
 ];
