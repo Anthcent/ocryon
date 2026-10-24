@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
-import { HttpError } from '../lib/http-error.js';
+import { HttpError, isUniqueViolation } from '../lib/http-error.js';
 import { currentUser, requireRole } from '../middleware/auth.js';
 
 const reviewSchema = z.object({ status: z.enum(['approved', 'rejected', 'suspended']) });
+const profileSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  email: z.email().trim().toLowerCase(),
+  room: z.string().trim().min(2).max(100),
+});
+const userId = (value: unknown) => z.string().regex(/^[1-9]\d*$/).transform(Number).pipe(z.number().int().safe()).parse(value);
 
 export function administrationRouter(ctx: AppContext) {
   const router = Router();
@@ -14,6 +20,55 @@ export function administrationRouter(ctx: AppContext) {
     const users = await ctx.db.query(`SELECT id, name, email, room, role, status, created_at AS "createdAt",
       reviewed_at AS "reviewedAt" FROM users ORDER BY created_at DESC`);
     res.json({ users });
+  });
+
+  router.patch('/users/:id/profile', requireRole('admin'), async (req, res) => {
+    const id = userId(req.params.id);
+    const { name, email, room } = profileSchema.parse(req.body);
+    try {
+      const user = await ctx.db.one(`UPDATE users SET name = ?, email = ?, room = ? WHERE id = ? AND role <> 'admin'
+        RETURNING id, name, email, room, role, status`, [name, email, room, id]);
+      if (!user) throw new HttpError(404, 'Usuario no encontrado', 'not_found');
+      res.json({ user });
+    } catch (err) {
+      if (isUniqueViolation(err)) throw new HttpError(409, 'Ya existe una cuenta con ese correo', 'email_taken');
+      throw err;
+    }
+  });
+
+  // Metadata only: load the text of a page or document when it is opened.
+  // Unlike the global archive, this view has no 200-item cap.
+  router.get('/users/:id/catalog', async (req, res) => {
+    const id = userId(req.params.id);
+    const person = await ctx.db.one('SELECT id, name, email, room, role, status FROM users WHERE id = ?', [id]);
+    if (!person) throw new HttpError(404, 'Usuario no encontrado', 'not_found');
+    const [groups, scans, documents] = await Promise.all([
+      ctx.db.query(`SELECT g.id, g.title, g.author, g.category, g.updated_at AS "updatedAt",
+        COUNT(s.id)::int AS "scanCount" FROM groups g LEFT JOIN scans s ON s.group_id = g.id AND s.user_id = g.user_id
+        WHERE g.user_id = ? GROUP BY g.id ORDER BY lower(g.title), g.id`, [id]),
+      ctx.db.query(`SELECT s.id, s.group_id AS "groupId", s.title, s.position, s.page_label AS "pageLabel",
+        s.word_count AS "wordCount", s.created_at AS "createdAt"
+        FROM scans s WHERE s.user_id = ? ORDER BY s.group_id NULLS LAST, s.position, s.created_at, s.id`, [id]),
+      ctx.db.query(`SELECT id, title, template_name AS "templateName", created_at AS "createdAt"
+        FROM documents WHERE user_id = ? ORDER BY created_at DESC, id DESC`, [id]),
+    ]);
+    res.json({ user: person, groups, scans, documents });
+  });
+
+  router.get('/users/:id/scans/:scanId', async (req, res) => {
+    const scan = await ctx.db.one(`SELECT id, title, text, page_label AS "pageLabel", position,
+      word_count AS "wordCount", created_at AS "createdAt" FROM scans WHERE id = ? AND user_id = ?`,
+    [userId(req.params.scanId), userId(req.params.id)]);
+    if (!scan) throw new HttpError(404, 'Escaneo no encontrado', 'not_found');
+    res.json({ scan });
+  });
+
+  router.get('/users/:id/documents/:documentId', async (req, res) => {
+    const document = await ctx.db.one(`SELECT id, title, text, template_name AS "templateName",
+      created_at AS "createdAt" FROM documents WHERE id = ? AND user_id = ?`,
+    [userId(req.params.documentId), userId(req.params.id)]);
+    if (!document) throw new HttpError(404, 'Documento no encontrado', 'not_found');
+    res.json({ document });
   });
 
   router.patch('/users/:id/status', async (req, res) => {

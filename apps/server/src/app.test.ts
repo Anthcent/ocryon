@@ -116,6 +116,61 @@ describe('auth', () => {
     await operator.agent.delete(`/api/administration/scans/${scan.body.ids[0]}`).set('X-Requested-With', 'ocryon').expect(403);
     await admin.agent.delete(`/api/administration/scans/${scan.body.ids[0]}`).set('X-Requested-With', 'ocryon').expect(204);
   }, 15_000);
+  it('admin edita ficha y catálogo por usuario; operador consulta sin poder editar', async () => {
+    const personal = await registered('luz@example.com');
+    const other = await registered('other@example.com');
+    const owner = (await db.one<{ id: number }>('SELECT id FROM users WHERE email = ?', ['luz@example.com']))!.id;
+    const outsider = (await db.one<{ id: number }>('SELECT id FROM users WHERE email = ?', ['other@example.com']))!.id;
+    const group = (await db.one<{ id: number }>(`INSERT INTO groups (user_id, title, author)
+      VALUES (?, 'Historia regional', 'Biblioteca') RETURNING id`, [owner]))!.id;
+    const first = (await db.one<{ id: number }>(`INSERT INTO scans (user_id, group_id, title, text, engine, position)
+      VALUES (?, ?, 'Segunda página', 'Texto dos', 'manual', 2) RETURNING id`, [owner, group]))!.id;
+    await db.run(`INSERT INTO scans (user_id, group_id, title, text, engine, position)
+      VALUES (?, ?, 'Primera página', 'Texto uno', 'manual', 1)`, [owner, group]);
+    await db.run(`INSERT INTO scans (user_id, title, text, engine)
+      VALUES (?, 'Nota libre', 'Texto libre', 'manual')`, [owner]);
+    const foreign = (await db.one<{ id: number }>(`INSERT INTO scans (user_id, title, text, engine)
+      VALUES (?, 'Privado', 'Solo otro usuario', 'manual') RETURNING id`, [outsider]))!.id;
+    const doc = (await db.one<{ id: number }>(`INSERT INTO documents (user_id, template_key, template_name, title, fields, text)
+      VALUES (?, 'letter', 'Carta', 'Solicitud', '[]', 'Contenido') RETURNING id`, [owner]))!.id;
+
+    const admin = setup();
+    await admin.post('/api/auth/register', { name: 'Responsable', email: 'admin@example.com', password: 'secreto123', room: 'Dirección' }).expect(201);
+    await db.run("UPDATE users SET role = 'admin', status = 'approved' WHERE email = ?", ['admin@example.com']);
+    await admin.post('/api/auth/login', { email: 'admin@example.com', password: 'secreto123' }).expect(200);
+    await personal.agent.get(`/api/administration/users/${owner}/catalog`).expect(403);
+    const catalog = await admin.agent.get(`/api/administration/users/${owner}/catalog`).expect(200);
+    expect(catalog.body.groups).toMatchObject([{ title: 'Historia regional', scanCount: 2 }]);
+    expect(catalog.body.scans.map((scan: { title: string }) => scan.title)).toEqual(['Primera página', 'Segunda página', 'Nota libre']);
+    expect(catalog.body.scans[0]).not.toHaveProperty('text');
+    expect(catalog.body.documents).toMatchObject([{ title: 'Solicitud' }]);
+    await db.run(`INSERT INTO scans (user_id, title, text, engine)
+      SELECT ?, 'Página extra ' || n, '', 'manual' FROM generate_series(1, 201) AS n`, [owner]);
+    const complete = await admin.agent.get(`/api/administration/users/${owner}/catalog`).expect(200);
+    expect(complete.body.scans).toHaveLength(204);
+    expect((await admin.agent.get(`/api/administration/users/${owner}/scans/${first}`).expect(200)).body.scan.text).toBe('Texto dos');
+    expect((await admin.agent.get(`/api/administration/users/${owner}/documents/${doc}`).expect(200)).body.document.text).toBe('Contenido');
+    await admin.agent.get(`/api/administration/users/${owner}/scans/${foreign}`).expect(404);
+    await admin.agent.get(`/api/administration/users/${outsider}/documents/${doc}`).expect(404);
+    await admin.agent.get('/api/administration/users/999999/catalog').expect(404);
+    await admin.agent.patch(`/api/administration/users/${owner}/profile`).set('X-Requested-With', 'ocryon')
+      .send({ name: 'Luz Editada', email: 'other@example.com', room: 'Sala Central' }).expect(409);
+    const changed = await admin.agent.patch(`/api/administration/users/${owner}/profile`).set('X-Requested-With', 'ocryon')
+      .send({ name: 'Luz Editada', email: 'luz.nueva@example.com', room: 'Sala Central' }).expect(200);
+    expect(changed.body.user).toMatchObject({ name: 'Luz Editada', room: 'Sala Central', email: 'luz.nueva@example.com' });
+    const adminId = (await db.one<{ id: number }>('SELECT id FROM users WHERE email = ?', ['admin@example.com']))!.id;
+    await admin.agent.patch(`/api/administration/users/${adminId}/profile`).set('X-Requested-With', 'ocryon')
+      .send({ name: 'Admin editado', email: 'admin@example.com', room: 'Dirección' }).expect(404);
+
+    const operator = setup();
+    await operator.post('/api/auth/register', { name: 'Operador', email: 'op@example.com', password: 'secreto123', room: 'Dirección' }).expect(201);
+    await db.run("UPDATE users SET role = 'operator', status = 'approved' WHERE email = ?", ['op@example.com']);
+    await operator.post('/api/auth/login', { email: 'op@example.com', password: 'secreto123' }).expect(200);
+    await operator.agent.get(`/api/administration/users/${owner}/catalog`).expect(200);
+    await operator.agent.patch(`/api/administration/users/${owner}/profile`).set('X-Requested-With', 'ocryon')
+      .send({ name: 'Cambio', email: 'luz.nueva@example.com', room: 'Otra sala' }).expect(403);
+    await other.agent.get(`/api/administration/users/${owner}/scans/${first}`).expect(403);
+  }, 20_000);
   it('registra, mantiene la sesión y cierra sesión', async () => {
     const { agent, post } = await registered();
     const me = await agent.get('/api/auth/me').expect(200);

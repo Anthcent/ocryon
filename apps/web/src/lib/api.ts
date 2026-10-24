@@ -1,4 +1,5 @@
 import type {
+  AdminCatalog,
   Analysis,
   CustomTemplate,
   DocField,
@@ -96,6 +97,13 @@ export const api = {
   },
   administration: {
     users: () => request<{ users: User[] }>('/administration/users'),
+    updateProfile: (id: number, data: Pick<User, 'name' | 'email' | 'room'>) =>
+      request<{ user: User }>(`/administration/users/${id}/profile`, { method: 'PATCH', json: data }),
+    catalog: (id: number) => request<AdminCatalog>(`/administration/users/${id}/catalog`),
+    userScan: (userId: number, scanId: number) =>
+      request<{ scan: { text: string } }>(`/administration/users/${userId}/scans/${scanId}`),
+    userDocument: (userId: number, documentId: number) =>
+      request<{ document: { text: string } }>(`/administration/users/${userId}/documents/${documentId}`),
     review: (id: number, status: 'approved' | 'rejected' | 'suspended') =>
       request<{ user: User }>(`/administration/users/${id}/status`, { method: 'PATCH', json: { status } }),
     setRole: (id: number, role: 'personal' | 'operator') =>

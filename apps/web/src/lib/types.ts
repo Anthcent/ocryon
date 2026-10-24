@@ -11,6 +11,13 @@ export interface User {
   room: string;
 }
 
+export interface AdminCatalog {
+  user: User;
+  groups: { id: number; title: string; author: string; category: string; updatedAt: string; scanCount: number }[];
+  scans: { id: number; groupId: number | null; title: string; position: number; pageLabel: string; wordCount: number; createdAt: string }[];
+  documents: { id: number; title: string; templateName: string; createdAt: string }[];
+}
+
 export interface KeyStatus {
   configured: boolean;
   source: 'user' | 'server' | 'none';

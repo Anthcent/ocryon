@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { PageLoader } from './components/ui';
 import { AuthPage } from './pages/Auth';
 import { AdministrationPage } from './pages/Administration';
+import { AdministrationUserPage } from './pages/AdministrationUser';
 import { CatalogPage } from './pages/Catalog';
 import { DocumentDetailPage } from './pages/DocumentDetail';
 import { DocumentNewPage } from './pages/DocumentNew';
@@ -36,6 +37,7 @@ function PrivateApp() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="administracion" element={<AdministrationPage />} />
+            <Route path="administracion/usuarios/:id" element={<AdministrationUserPage />} />
             <Route index element={<HomePage />} />
             <Route path="escanear" element={<ScannerPage />} />
             <Route path="catalogo" element={<CatalogPage />} />
